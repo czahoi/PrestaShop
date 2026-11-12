@@ -1,31 +1,12 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context;
 
+use Behat\Behat\Context\Environment\InitializedContextEnvironment;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Cache;
 use Context;
@@ -58,26 +39,33 @@ class TaxFeatureContext extends AbstractPrestaShopFeatureContext
     protected $carrierFeatureContext;
 
     /**
-     * @var ProductFeatureContext
+     * @var LegacyProductFeatureContext
      */
     protected $productFeatureContext;
 
     /** @BeforeScenario */
     public function before(BeforeScenarioScope $scope)
     {
-        $this->carrierFeatureContext = $scope->getEnvironment()->getContext(CarrierFeatureContext::class);
-        $this->productFeatureContext = $scope->getEnvironment()->getContext(ProductFeatureContext::class);
+        /** @var InitializedContextEnvironment $environment */
+        $environment = $scope->getEnvironment();
+        /** @var CarrierFeatureContext $carrierFeatureContext */
+        $carrierFeatureContext = $environment->getContext(CarrierFeatureContext::class);
+        /** @var LegacyProductFeatureContext $productFeatureContext */
+        $productFeatureContext = $environment->getContext(LegacyProductFeatureContext::class);
+
+        $this->carrierFeatureContext = $carrierFeatureContext;
+        $this->productFeatureContext = $productFeatureContext;
     }
 
     /**
      * @Given /^there is a tax named "(.+)" and rate (\d+\.\d+)%$/
      */
-    public function createTax($name, $rate)
+    public function createTax(string $name, float $rate): void
     {
         $tax = new Tax();
         $tax->name = [(int) Context::getContext()->language->id => 'fake'];
         $tax->rate = $rate;
-        $tax->active = 1;
+        $tax->active = true;
         $tax->add();
         $this->taxes[$name] = $tax;
     }
@@ -92,7 +80,7 @@ class TaxFeatureContext extends AbstractPrestaShopFeatureContext
         $this->checkTaxWithNameExists($taxName);
 
         $taxRuleGroup = new TaxRulesGroup();
-        $taxRuleGroup->active = 1;
+        $taxRuleGroup->active = true;
         $taxRuleGroup->name = 'fake';
         $taxRuleGroup->add();
         $this->taxRuleGroups[$taxRuleName] = $taxRuleGroup;
@@ -118,7 +106,7 @@ class TaxFeatureContext extends AbstractPrestaShopFeatureContext
         $this->checkTaxWithNameExists($taxName);
 
         $taxRuleGroup = new TaxRulesGroup();
-        $taxRuleGroup->active = 1;
+        $taxRuleGroup->active = true;
         $taxRuleGroup->name = 'fake';
         $taxRuleGroup->add();
         $this->taxRuleGroups[$taxRuleName] = $taxRuleGroup;
@@ -136,17 +124,17 @@ class TaxFeatureContext extends AbstractPrestaShopFeatureContext
     }
 
     /**
-     * @param $name
+     * @param string $name
      */
-    public function checkTaxWithNameExists($name)
+    public function checkTaxWithNameExists(string $name): void
     {
         $this->checkFixtureExists($this->taxes, 'Tax', $name);
     }
 
     /**
-     * @param $name
+     * @param string $name
      */
-    public function checkTaxRuleWithNameExists($name)
+    public function checkTaxRuleWithNameExists(string $name): void
     {
         $this->checkFixtureExists($this->taxRules, 'Tax rule', $name);
     }
@@ -186,13 +174,12 @@ class TaxFeatureContext extends AbstractPrestaShopFeatureContext
     }
 
     /**
-     * @Given /^carrier "(.+)" belongs to tax group "(.+)"$/
+     * @Given /^Ecotax belongs to tax group "(.+)"$/
      */
-    public function setCarrierTaxRuleGroup($carrierName, $taxName)
+    public function setEcotaxTaxRuleGroup($taxName)
     {
-        $this->carrierFeatureContext->checkCarrierWithNameExists($carrierName);
         $this->checkTaxRuleWithNameExists($taxName);
-        $carrier = $this->carrierFeatureContext->getCarrierWithName($carrierName);
-        $carrier->setTaxRulesGroup($this->taxRuleGroups[$taxName]->id);
+        $configuration = CommonFeatureContext::getContainer()->get('prestashop.adapter.legacy.configuration');
+        $configuration->set('PS_ECOTAX_TAX_RULES_GROUP_ID', $this->taxRuleGroups[$taxName]->id);
     }
 }

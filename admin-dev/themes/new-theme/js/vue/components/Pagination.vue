@@ -1,26 +1,6 @@
-<!--**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+<!--*
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  *-->
 <template>
   <div class="pagination">
@@ -30,7 +10,7 @@
           @click="goToPage(currentPage - 1)"
           :disabled="currentPage === 1"
         >
-          <i class="material-icons">chevron_left</i>
+          <i class="material-icons rtl-flip">chevron_left</i>
         </button>
       </li>
       <li
@@ -47,17 +27,19 @@
           @click="goToPage(currentPage + 1)"
           :disabled="currentPage === paginatedDatas.length"
         >
-          <i class="material-icons">chevron_right</i>
+          <i class="material-icons rtl-flip">chevron_right</i>
         </button>
       </li>
     </ul>
   </div>
 </template>
 
-<script>
-  export default {
+<script lang="ts">
+  import {defineComponent} from 'vue';
+
+  export default defineComponent({
     name: 'Pagination',
-    data() {
+    data(): {paginatedDatas: Array<Record<string, any>>, currentPage: number} {
       return {
         paginatedDatas: [],
         currentPage: 1,
@@ -65,7 +47,7 @@
     },
     props: {
       datas: {
-        type: Array,
+        type: Array as () => Array<Record<string, any>>,
         default: () => [],
       },
       paginationLength: {
@@ -79,7 +61,7 @@
        *
        * @param {int} pageNumber
        */
-      goToPage(pageNumber) {
+      goToPage(pageNumber: number): void {
         if (this.paginatedDatas[pageNumber - 1]) {
           this.currentPage = pageNumber;
           this.$emit('paginated', {
@@ -93,7 +75,7 @@
        *
        * @param {array} newDatas
        */
-      constructDatas(newDatas) {
+      constructDatas(newDatas: Array<Record<string, any>>): void {
         this.paginatedDatas = [];
 
         for (let i = 0; i < newDatas.length; i += this.paginationLength) {
@@ -110,7 +92,7 @@
        *
        * @param {int} key
        */
-      isActive(key) {
+      isActive(key: number): string | null {
         return this.currentPage === key + 1 ? 'active' : null;
       },
     },
@@ -126,11 +108,11 @@
        *
        * @param {array} newDatas
        */
-      datas(newDatas) {
+      datas(newDatas: Array<Record<string, any>>): void {
         this.constructDatas(newDatas);
       },
     },
-  };
+  });
 </script>
 
 <style lang="scss" type="text/scss">
@@ -150,11 +132,11 @@
     list-style-type: none;
 
     button {
-      font-size: 1rem;
-      padding: 0.5rem;
+      font-size: var(--#{$cdk}size-16);
+      padding: var(--#{$cdk}size-8);
       transition: 0.25s ease-out;
       cursor: pointer;
-      color: #6c868e;
+      color: var(--#{$cdk}primary-600);
       border: 0;
       background-color: inherit;
 
@@ -164,20 +146,20 @@
       }
 
       &:hover:not(:disabled) {
-        color: $primary;
+        color: var(--#{$cdk}primary-800);
       }
     }
 
     &.active {
       button {
-        color: $primary;
+        color: var(--#{$cdk}primary-800);
       }
     }
   }
 
   &-previous,
   &-next {
-    font-size: 1.25rem;
+    font-size: var(--#{$cdk}size-20);
   }
 }
 </style>

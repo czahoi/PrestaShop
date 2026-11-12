@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -35,14 +15,23 @@ use Employee;
 use Hook;
 use Module;
 use PrestaShop\PrestaShop\Adapter\Configuration;
-use PrestaShop\PrestaShop\Core\Addon\Module\ModuleManager;
+use PrestaShop\PrestaShop\Core\Context\ContextBuilderPreparer;
+use PrestaShop\PrestaShop\Core\Module\ModuleManager;
+use PrestaShop\PrestaShop\Core\Module\ModuleRepository;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase as TestCase;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\RouterInterface;
+use Tests\Integration\Utility\LoginTrait;
 
+/**
+ * The controller installs and uninstalls modules so it needs to clear the cache, that's why it's better isolated
+ *
+ * @group isolatedProcess
+ */
 class PositionsControllerTest extends TestCase
 {
+    use LoginTrait;
     /**
      * @var int
      */
@@ -70,7 +59,9 @@ class PositionsControllerTest extends TestCase
         Module::clearStaticCache();
 
         parent::setUp();
-        self::bootKernel();
+
+        $this->client = self::createClient();
+        $this->loginUser($this->client);
 
         // Unregister all modules hooked on displayHome
         Db::getInstance()->execute(sprintf(
@@ -83,17 +74,25 @@ class PositionsControllerTest extends TestCase
 
         // Mock Congiguration
         $configurationMock = $this->getMockBuilder(Configuration::class)
-            ->setMethods(['get'])
+            ->onlyMethods(['get'])
             ->disableOriginalConstructor()
             ->disableAutoload()
             ->getMock();
         $configurationMock->method('get')->will($this->returnValueMap([
             ['_PS_MODULE_DIR_', null, null, dirname(__DIR__, 6) . '/Resources/modules/'],
+            ['_PS_ALL_THEMES_DIR_', null, null, dirname(__DIR__, 7) . '/themes/'],
         ]));
+
         self::$kernel->getContainer()->set('prestashop.adapter.legacy.configuration', $configurationMock);
 
+        // Language context must be initialized because ModuleRepository depends on it
+        /** @var ContextBuilderPreparer $preparer */
+        $preparer = self::$kernel->getContainer()->get(ContextBuilderPreparer::class);
+        $preparer->prepareLanguageId(1);
+
         /** @var ModuleManager */
-        $moduleManager = self::$kernel->getContainer()->get('prestashop.module.manager');
+        $moduleManager = self::$kernel->getContainer()->get(ModuleManager::class);
+        $moduleRepository = self::$kernel->getContainer()->get(ModuleRepository::class);
         // We use modules present in tests/resources/modules to be independent with the external API
         // We install two modules that are not present in the test db to be sure every step of the install performs correctly
         // And both modules have a common hook displayHome
@@ -106,12 +105,21 @@ class PositionsControllerTest extends TestCase
             $moduleManager->install($module);
         }
 
-        $this->firstModuleId = $moduleManager->getModuleIdByName('ps_banner');
-        $this->secondModuleId = $moduleManager->getModuleIdByName('bankwire');
+        $this->firstModuleId = $moduleRepository->getModule('ps_banner')->database->get('id');
+        $this->secondModuleId = $moduleRepository->getModule('bankwire')->database->get('id');
         $this->hookId = Hook::getIdByName('displayHome');
 
-        $this->client = self::createClient();
-        $this->router = self::$container->get('router');
+        $this->router = self::getContainer()->get('router');
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        // Remove files generate during API calls
+        if (file_exists(_PS_THEME_DIR_ . 'shop1.json')) {
+            unlink(_PS_THEME_DIR_ . 'shop1.json');
+        }
     }
 
     /**

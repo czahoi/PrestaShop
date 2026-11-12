@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\PrestaShopBundle\Command;
@@ -48,12 +28,12 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
 
     public function testMissingArguments()
     {
-        $this->expectException(RuntimeException::class, 'Not enough arguments (missing: "theme, locale").');
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Not enough arguments (missing: "theme, locale").');
 
         $application = new Application(static::$kernel);
 
         $command = $application->find('prestashop:mail:generate');
-        $this->assertNotNull($command);
         $commandTester = new CommandTester($command);
         $commandTester->execute([
             'command' => $command->getName(),
@@ -68,7 +48,6 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
         $application = new Application(static::$kernel);
 
         $command = $application->find('prestashop:mail:generate');
-        $this->assertNotNull($command);
         $commandTester = new CommandTester($command);
         $commandTester->execute([
             'command' => $command->getName(),
@@ -80,7 +59,7 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
 
         $finder = new Finder();
         $finder->files()->in($outputFolder);
-        //Core files + modules files, each one in html and txt type
+        // Core files + modules files, each one in html and txt type
         $totalLayoutsNb = ($themeInfos['coreLayoutsNb'] + $themeInfos['modulesLayoutsNb']) * 2;
         $this->assertEquals($totalLayoutsNb, $finder->count());
 
@@ -109,7 +88,6 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
         $application = new Application(static::$kernel);
 
         $command = $application->find('prestashop:mail:generate');
-        $this->assertNotNull($command);
         $commandTester = new CommandTester($command);
         $commandTester->execute([
             'command' => $command->getName(),
@@ -122,7 +100,7 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
 
         $finder = new Finder();
         $finder->files()->in($outputFolder);
-        //Core files + modules files, each one in html and txt type
+        // Core files + modules files, each one in html and txt type
         $totalLayoutsNb = ($themeInfos['coreLayoutsNb'] + $themeInfos['modulesLayoutsNb']) * 2;
         $this->assertEquals($totalLayoutsNb, $finder->count());
 
@@ -159,19 +137,18 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
     {
         $themeInfos = [
             'coreLayouts' => [],
-            'coreLayoutsNb' => 0,
+            'coreLayoutsNb' => '0',
             'modulesLayouts' => [],
-            'modulesLayoutsNb' => 0,
+            'modulesLayoutsNb' => '0',
         ];
         $container = static::$kernel->getContainer();
-        $mailThemesFolder = $container->getParameter('mail_themes_dir');
+        $mailThemesFolder = (string) $container->getParameter('mail_themes_dir');
         $themeFolder = implode(DIRECTORY_SEPARATOR, [$mailThemesFolder, $theme]);
         $coreFolder = implode(DIRECTORY_SEPARATOR, [$themeFolder, MailTemplateInterface::CORE_CATEGORY]);
         $modulesFolder = implode(DIRECTORY_SEPARATOR, [$themeFolder, MailTemplateInterface::MODULES_CATEGORY]);
 
         $finder = new Finder();
         $finder->in($coreFolder);
-        /** @var \SplFileInfo $coreFile */
         foreach ($finder as $coreFile) {
             $themeInfos['coreLayouts'][] = $coreFile->getBasename('.html.twig');
             ++$themeInfos['coreLayoutsNb'];
@@ -179,12 +156,10 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
 
         $finder = new Finder();
         $finder->in($modulesFolder)->depth(0);
-        /** @var \SplFileInfo $moduleFolder */
         foreach ($finder as $moduleFolder) {
             $themeInfos['modulesLayouts'][$moduleFolder->getBasename()] = [];
             $moduleFinder = new Finder();
             $moduleFinder->in($moduleFolder->getRealPath());
-            /** @var \SplFileInfo $moduleFile */
             foreach ($moduleFinder as $moduleFile) {
                 $themeInfos['modulesLayouts'][$moduleFolder->getBasename()][] = $moduleFile->getBasename('.html.twig');
                 ++$themeInfos['modulesLayoutsNb'];
@@ -205,10 +180,5 @@ class GenerateMailTemplatesCommandTest extends KernelTestCase
         $this->fileSystem->mkdir($outputFolder);
 
         return $outputFolder;
-    }
-
-    protected function tearDown(): void
-    {
-        self::$kernel->shutdown();
     }
 }

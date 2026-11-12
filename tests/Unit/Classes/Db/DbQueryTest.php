@@ -1,32 +1,12 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
-namespace Tests\Unit\Classes;
+namespace Tests\Unit\Classes\Db;
 
 if (!defined('_DB_PREFIX_')) {
     define('_DB_PREFIX_', 'test_');
@@ -104,12 +84,12 @@ class DbQueryTest extends TestCase
     }
 
     /**
-     * @param mixed $dbQuery
-     * @param mixed $expectedValue
+     * @param DbQuery $dbQuery
+     * @param string $expectedValue
      *
      * @dataProvider providerBuild
      */
-    public function testBuild(DbQuery $dbQuery, $expectedValue)
+    public function testBuild(DbQuery $dbQuery, string $expectedValue): void
     {
         $this->assertSame(trim($dbQuery->build()), trim($expectedValue));
     }
@@ -227,7 +207,7 @@ class DbQueryTest extends TestCase
             ],
             [
                 $selectWithSubQuery,
-                'SELECT *' . self::BREAK_LINE . 'FROM (SELECT *' . self::BREAK_LINE . 'FROM `test_product` p' . self::BREAK_LINE . 'WHERE (p.active = 1)' . self::BREAK_LINE . ') p' . self::BREAK_LINE . 'WHERE (p.visibility in ("both", "search"))',
+                'SELECT *' . self::BREAK_LINE . 'FROM (SELECT *' . self::BREAK_LINE . 'FROM `' . _DB_PREFIX_ . 'product` p' . self::BREAK_LINE . 'WHERE (p.active = 1)' . self::BREAK_LINE . ') p' . self::BREAK_LINE . 'WHERE (p.visibility in ("both", "search"))',
             ],
         ];
     }

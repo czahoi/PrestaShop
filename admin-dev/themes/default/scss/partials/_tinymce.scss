@@ -1,3 +1,7 @@
+/**
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
 .mce-container {
   position: static;
   box-sizing: content-box;
@@ -474,6 +478,7 @@ div.mce-tinymce-inline {
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
+  // stylelint-disable-next-line value-keyword-case
   text-rendering: optimizeLegibility;
   @include padding-right(10px);
 }
@@ -805,6 +810,12 @@ body .mce-abs-layout-item {
 }
 
 .mce-btn-group {
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
   .mce-btn {
     border: solid 1px #ccc;
     border-radius: 0;

@@ -1,30 +1,11 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import {Grid} from '@PSTypes/grid';
 import GridMap from '@components/grid/grid-map';
+import {isUndefined} from '@components/typeguard';
 import 'tablednd/dist/jquery.tablednd.min';
 
 const {$} = window;
@@ -69,18 +50,24 @@ export default class PositionExtension {
     grid
       .getContainer()
       .find('.js-drag-handle')
-      .hover(
-        function hover() {
+      .on(
+        'mouseenter',
+        function () {
           $(this)
             .closest('tr')
             .addClass('hover');
         },
-        function stopHover() {
+      ).on(
+        'mouseleave',
+        function () {
           $(this)
             .closest('tr')
             .removeClass('hover');
         },
       );
+
+    this.setReorderButtonLabel();
+    this.getReorderButton().on('click', (event) => this.oncClickReorderButton(event));
   }
 
   /**
@@ -145,7 +132,7 @@ export default class PositionExtension {
         const position = $positionWrapper.data('position');
         const id = `row_${rowId}_${position}`;
         $positionWrapper.closest('tr').attr('id', id);
-        $positionWrapper.closest('td').addClass(GridMap.dragHandler);
+        $positionWrapper.closest('td').addClass(GridMap.dragHandlerClass);
         $positionWrapper.closest('tr').data('dragAndDropOffset', counter);
 
         counter += 1;
@@ -221,20 +208,100 @@ export default class PositionExtension {
   private computeMappingBetweenOldAndNewPositions(
     rowsData: Array<RowDatas>,
   ): Array<DNDPositions> {
-    const regex = /^row_(\d+)_(\d+)$/;
-    const mapping = Array(rowsData.length).map(Object);
+    const regex = /^row_(?<rowId>\d+)_(?<oldPosition>\d+)$/;
+    const mapping: Array<DNDPositions> = [];
 
+    // First loop is to create the mapping objects with old positions
     for (let i = 0; i < rowsData.length; i += 1) {
-      const regexResult = <RegExpPositions>regex.exec(rowsData[i].rowMarker);
+      const regexResult = regex.exec(rowsData[i].rowMarker);
 
-      if (regexResult?.rowId && regexResult?.oldPosition) {
-        mapping[i].rowId = regexResult.rowId;
-        mapping[i].oldPosition = parseInt(regexResult.oldPosition, 10);
+      if (regexResult
+        && !isUndefined(regexResult.groups)
+        && !isUndefined(regexResult.groups.rowId)
+        && !isUndefined(regexResult.groups.oldPosition)) {
+        const oldPosition: number = parseInt(regexResult?.groups?.oldPosition, 10);
+        mapping[i] = {
+          rowId: regexResult.groups.rowId,
+          oldPosition,
+          newPosition: oldPosition,
+        };
       }
-      // This row will have as a new position the old position of the current one
-      mapping[rowsData[i].offset].newPosition = mapping[i].oldPosition;
+
+      // Second loop, now that all positions are defined for all rows we can switch the position when needed
+      for (let j = 0; j < rowsData.length; j += 1) {
+        if (!isUndefined(rowsData[j])
+          && !isUndefined(rowsData[j].offset)
+          && !isUndefined(mapping[rowsData[j].offset])
+          && !isUndefined(mapping[j])) {
+          // This row will have as a new position the old position of the current one
+          mapping[rowsData[j].offset].newPosition = mapping[j].oldPosition;
+        }
+      }
     }
 
     return mapping;
+  }
+
+  /**
+   * Check if position reorder is active
+   *
+   * @private
+   */
+  private isPositionsReorderActive(): boolean {
+    return this.grid.getContainer()
+      .find('.ps-sortable-column[data-sort-col-name="position"]')
+      .first()
+      .data('sort-is-current');
+  }
+
+  /**
+   * Get reorder button
+   *
+   * @private
+   */
+  private getReorderButton(): JQuery<HTMLElement> {
+    return this.grid
+      .getContainer()
+      .find('.js-btn-reorder-positions')
+      .first();
+  }
+
+  /**
+   * Set reorder button label in function of sortable column state.
+   *
+   * @private
+   */
+  private setReorderButtonLabel(): void {
+    const rearrangeButton = this.getReorderButton();
+
+    if (this.isPositionsReorderActive()) {
+      rearrangeButton.hide();
+    } else {
+      rearrangeButton.data('label-reorder');
+    }
+  }
+
+  /**
+   * Onclick reorder button
+   *
+   * @param event
+   * @private
+   */
+  private oncClickReorderButton(event: JQuery.Event): void {
+    event.preventDefault();
+    // If positions are actually being reordered...
+    if (this.isPositionsReorderActive()) {
+      // we need to reset filters and order by of the grid
+      this.grid.getContainer()
+        .find('.ps-sortable-column')
+        .first()
+        .click();
+    } else {
+      // Else, we need to set the position column as the current sort ordering
+      this.grid.getContainer()
+        .find('.ps-sortable-column[data-sort-col-name="position"]')
+        .first()
+        .click();
+    }
   }
 }

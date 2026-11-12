@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -32,7 +12,7 @@ use Exception;
 use PHPUnit\Framework\TestCase;
 use PrestaShopBundle\Api\QueryParamsCollection;
 use PrestaShopBundle\Api\QueryStockParamsCollection;
-use Symfony\Component\HttpFoundation\ParameterBag;
+use Symfony\Component\HttpFoundation\InputBag;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -53,15 +33,13 @@ class QueryParamsCollectionTest extends TestCase
     /**
      * @dataProvider getInvalidPaginationParams
      *
-     * @test
-     *
-     * @param $pageIndex
-     * @param $pageSize
+     * @param int $pageIndex
+     * @param int $pageSize
      */
-    public function itShouldRaiseAnExceptionOnInvalidPaginationParams($pageIndex, $pageSize)
+    public function testItShouldRaiseAnExceptionOnInvalidPaginationParams(int $pageIndex, int $pageSize): void
     {
         try {
-            $this->itShouldMakeQueryParamsFromARequest(
+            $this->testItShouldMakeQueryParamsFromARequest(
                 'product',
                 $pageIndex,
                 $pageSize,
@@ -81,35 +59,34 @@ class QueryParamsCollectionTest extends TestCase
     /**
      * @return array
      */
-    public function getInvalidPaginationParams()
+    public function getInvalidPaginationParams(): array
     {
         return [
             [
-                $pageIndex = 0,
-                $pageSize = 100,
+                0,
+                100,
             ],
             [
-                $pageIndex = 1,
-                $pageSize = 100 + 1,
+                1,
+                100 + 1,
             ],
         ];
     }
 
     /**
      * @dataProvider getQueryParams
-     * @test
      *
-     * @param $order
-     * @param $pageIndex
-     * @param $pageSize
-     * @param $expectedSqlClauses
+     * @param string $order
+     * @param int|string|null $pageIndex
+     * @param int|string|null $pageSize
+     * @param array $expectedSqlClauses
      */
-    public function itShouldMakeQueryParamsFromARequest(
-        $order,
+    public function testItShouldMakeQueryParamsFromARequest(
+        string $order,
         $pageIndex,
         $pageSize,
-        $expectedSqlClauses
-    ) {
+        array $expectedSqlClauses
+    ): void {
         $requestMock = $this->mockRequest(
             [
                 'order' => $order,
@@ -129,26 +106,23 @@ class QueryParamsCollectionTest extends TestCase
 
         $expectedSqlClauses[2] = [QueryParamsCollection::SQL_CLAUSE_WHERE => ''];
 
-        $this->assertIsArray($sqlParts);
-
         $this->assertEquals($expectedSqlClauses, $sqlParts);
     }
 
     /**
      * @dataProvider getQueryParams
-     * @test
      *
-     * @param $order
-     * @param $pageIndex
-     * @param $pageSize
-     * @param $expectedSqlClauses
+     * @param string $order
+     * @param int|string|null $pageIndex
+     * @param int|string|null $pageSize
+     * @param array $expectedSqlClauses
      */
-    public function itShouldMakeQueryParamsWithProductFilterFromARequest(
-        $order,
+    public function testItShouldMakeQueryParamsWithProductFilterFromARequest(
+        string $order,
         $pageIndex,
         $pageSize,
-        $expectedSqlClauses
-    ) {
+        array $expectedSqlClauses
+    ): void {
         $requestMock = $this->mockRequest(
             [
                 'order' => $order,
@@ -168,8 +142,6 @@ class QueryParamsCollectionTest extends TestCase
 
         $expectedSqlClauses[1]['product_id'] = 1;
         $expectedSqlClauses[2] = [QueryParamsCollection::SQL_CLAUSE_WHERE => 'AND {product_id} = :product_id'];
-
-        $this->assertIsArray($sqlParts);
 
         $this->assertEquals($expectedSqlClauses, $sqlParts);
     }
@@ -227,17 +199,16 @@ class QueryParamsCollectionTest extends TestCase
 
     /**
      * @dataProvider getFilterParams
-     * @test
      *
-     * @param $params
-     * @param $expectedSql
-     * @param $message
+     * @param array $params
+     * @param array $expectedSql
+     * @param string $message
      */
-    public function itShouldMakeQueryParamsWithFilterFromARequest(
-        $params,
-        $expectedSql,
-        $message
-    ) {
+    public function testItShouldMakeQueryParamsWithFilterFromARequest(
+        array $params,
+        array $expectedSql,
+        string $message
+    ): void {
         $requestMock = $this->mockRequest(array_merge(
             $params,
             ['_attributes' => $this->mockAttributes([])]
@@ -258,7 +229,7 @@ class QueryParamsCollectionTest extends TestCase
         $supplierFilterMessage = 'It should provide with a SQL condition clause on supplier';
         $categoryFilterMessage = 'It should provide with a SQL condition clause on category';
         $keywordsFilterMessage =
-            'It should provide with SQL conditions clauses on product references, names and supplier names';
+            'It should provide with SQL conditions clauses on product references, names, EAN/isbn/upc/mpn codes and supplier names';
         $attributesFilterMessage = 'It should provide with SQL conditions clauses on product attributes';
         $featuresFilterMessage = 'It should provide with SQL conditions clauses on product features';
 
@@ -292,6 +263,14 @@ class QueryParamsCollectionTest extends TestCase
                     QueryParamsCollection::SQL_CLAUSE_HAVING => 'AND (' .
                         '{supplier_name} LIKE :keyword_0 OR ' .
                         '{product_reference} LIKE :keyword_0 OR ' .
+                        '{product_ean13} LIKE :keyword_0 OR ' .
+                        '{combination_ean13} LIKE :keyword_0 OR ' .
+                        '{product_isbn} LIKE :keyword_0 OR ' .
+                        '{combination_isbn} LIKE :keyword_0 OR ' .
+                        '{product_upc} LIKE :keyword_0 OR ' .
+                        '{combination_upc} LIKE :keyword_0 OR ' .
+                        '{product_mpn} LIKE :keyword_0 OR ' .
+                        '{combination_mpn} LIKE :keyword_0 OR ' .
                         '{product_name} LIKE :keyword_0 OR ' .
                         '{combination_name} LIKE :keyword_0' .
                         ')',
@@ -305,6 +284,14 @@ class QueryParamsCollectionTest extends TestCase
                     QueryParamsCollection::SQL_CLAUSE_HAVING => 'AND (' .
                         '{supplier_name} LIKE :keyword_0 OR ' .
                         '{product_reference} LIKE :keyword_0 OR ' .
+                        '{product_ean13} LIKE :keyword_0 OR ' .
+                        '{combination_ean13} LIKE :keyword_0 OR ' .
+                        '{product_isbn} LIKE :keyword_0 OR ' .
+                        '{combination_isbn} LIKE :keyword_0 OR ' .
+                        '{product_upc} LIKE :keyword_0 OR ' .
+                        '{combination_upc} LIKE :keyword_0 OR ' .
+                        '{product_mpn} LIKE :keyword_0 OR ' .
+                        '{combination_mpn} LIKE :keyword_0 OR ' .
                         '{product_name} LIKE :keyword_0 OR ' .
                         '{combination_name} LIKE :keyword_0' .
                         ')',
@@ -318,18 +305,42 @@ class QueryParamsCollectionTest extends TestCase
                     QueryParamsCollection::SQL_CLAUSE_HAVING => 'AND (' .
                         '{supplier_name} LIKE :keyword_0 OR ' .
                         '{product_reference} LIKE :keyword_0 OR ' .
+                        '{product_ean13} LIKE :keyword_0 OR ' .
+                        '{combination_ean13} LIKE :keyword_0 OR ' .
+                        '{product_isbn} LIKE :keyword_0 OR ' .
+                        '{combination_isbn} LIKE :keyword_0 OR ' .
+                        '{product_upc} LIKE :keyword_0 OR ' .
+                        '{combination_upc} LIKE :keyword_0 OR ' .
+                        '{product_mpn} LIKE :keyword_0 OR ' .
+                        '{combination_mpn} LIKE :keyword_0 OR ' .
                         '{product_name} LIKE :keyword_0 OR ' .
                         '{combination_name} LIKE :keyword_0' .
                         ')' . "\n" .
                         'AND (' .
                         '{supplier_name} LIKE :keyword_1 OR ' .
                         '{product_reference} LIKE :keyword_1 OR ' .
+                        '{product_ean13} LIKE :keyword_1 OR ' .
+                        '{combination_ean13} LIKE :keyword_1 OR ' .
+                        '{product_isbn} LIKE :keyword_1 OR ' .
+                        '{combination_isbn} LIKE :keyword_1 OR ' .
+                        '{product_upc} LIKE :keyword_1 OR ' .
+                        '{combination_upc} LIKE :keyword_1 OR ' .
+                        '{product_mpn} LIKE :keyword_1 OR ' .
+                        '{combination_mpn} LIKE :keyword_1 OR ' .
                         '{product_name} LIKE :keyword_1 OR ' .
                         '{combination_name} LIKE :keyword_1' .
                         ')' . "\n" .
                         'AND (' .
                         '{supplier_name} LIKE :keyword_2 OR ' .
                         '{product_reference} LIKE :keyword_2 OR ' .
+                        '{product_ean13} LIKE :keyword_2 OR ' .
+                        '{combination_ean13} LIKE :keyword_2 OR ' .
+                        '{product_isbn} LIKE :keyword_2 OR ' .
+                        '{combination_isbn} LIKE :keyword_2 OR ' .
+                        '{product_upc} LIKE :keyword_2 OR ' .
+                        '{combination_upc} LIKE :keyword_2 OR ' .
+                        '{product_mpn} LIKE :keyword_2 OR ' .
+                        '{combination_mpn} LIKE :keyword_2 OR ' .
                         '{product_name} LIKE :keyword_2 OR ' .
                         '{combination_name} LIKE :keyword_2' .
                         ')',
@@ -438,9 +449,9 @@ AND EXISTS(SELECT 1
     /**
      * @param array $testedParams
      *
-     * @return ParameterBag
+     * @return InputBag
      */
-    private function mockQuery(array $testedParams): ParameterBag
+    private function mockQuery(array $testedParams): InputBag
     {
         $params = [];
         $validQueryParams = [
@@ -460,9 +471,8 @@ AND EXISTS(SELECT 1
             }
         });
 
-        /** @var \Symfony\Component\HttpFoundation\ParameterBag $queryMock */
-        $queryMock = $this->createMock(ParameterBag::class);
-        $queryMock->method('all')->willReturn($params);
+        $queryMock = new InputBag();
+        $queryMock->replace($params);
 
         return $queryMock;
     }
@@ -470,12 +480,12 @@ AND EXISTS(SELECT 1
     /**
      * @param array $attributes
      *
-     * @return ParameterBag
+     * @return InputBag
      */
     private function mockAttributes(array $attributes)
     {
-        $attributesMock = $this->createMock(ParameterBag::class);
-        $attributesMock->method('all')->willReturn($attributes);
+        $attributesMock = new InputBag();
+        $attributesMock->replace($attributes);
 
         return $attributesMock;
     }
@@ -483,7 +493,7 @@ AND EXISTS(SELECT 1
     /**
      * @param array $params
      *
-     * @return ParameterBag
+     * @return Request
      */
     private function mockRequest(array $params)
     {

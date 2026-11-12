@@ -1,42 +1,24 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\Adapter\Module\Tab;
 
+use Exception;
 use PHPUnit\Framework\TestCase;
 use PrestaShop\PrestaShop\Adapter\Module\Tab\ModuleTabRegister;
 use PrestaShopBundle\Entity\Repository\LangRepository;
 use PrestaShopBundle\Entity\Repository\TabRepository;
 use Psr\Log\LoggerInterface;
+use ReflectionClass;
 use Symfony\Component\Config\Loader\Loader;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
-use Symfony\Component\Translation\TranslatorInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 class ModuleTabRegisterTest extends TestCase
 {
@@ -121,7 +103,7 @@ class ModuleTabRegisterTest extends TestCase
         ];
 
         $this->tabRegister = $this->getMockBuilder(ModuleTabRegister::class)
-            ->setMethods(['getModuleAdminControllersFilename'])
+            ->onlyMethods(['getModuleAdminControllersFilename'])
             ->setConstructorArgs([
                 $this->createMock(TabRepository::class),
                 $this->createMock(LangRepository::class),
@@ -140,7 +122,7 @@ class ModuleTabRegisterTest extends TestCase
     protected function buildFilesystemMock(): Filesystem
     {
         $filesystemMock = $this->getMockBuilder(Filesystem::class)
-            ->setMethods(['exists'])
+            ->onlyMethods(['exists'])
             ->disableOriginalConstructor()
             ->getMock()
         ;
@@ -164,7 +146,7 @@ class ModuleTabRegisterTest extends TestCase
     protected function buildRoutingConfigLoaderMock(): Loader
     {
         $moduleRoutingLoader = $this->getMockBuilder(Loader::class)
-            ->setMethods(['import', 'load', 'supports', 'getResolver', 'setResolver'])
+            ->onlyMethods(['import', 'load', 'supports', 'getResolver', 'setResolver'])
             ->disableOriginalConstructor()
             ->getMock()
         ;
@@ -201,7 +183,7 @@ class ModuleTabRegisterTest extends TestCase
     public function testWorkingTabsAreOk(string $moduleName, array $tabs): void
     {
         foreach ($tabs as $tab) {
-            // If exception exception, do not test it here
+            // If exception, do not test it here
             if (array_key_exists('exception', $tab)) {
                 continue;
             }
@@ -215,17 +197,17 @@ class ModuleTabRegisterTest extends TestCase
      */
     public function testNonWorkingTabsThrowException(string $moduleName, array $tabs): void
     {
-        foreach ($tabs as $tab) {
-            // If an exception is expected, test it here
-            if (!array_key_exists('exception', $tab)) {
-                $this->assertTrue(!array_key_exists('exception', $tab));
-                continue;
-            }
+        $filteredTabs = array_filter($tabs, function ($tab) {return array_key_exists('exception', $tab); });
+        if (empty($filteredTabs)) {
+            $this->expectNotToPerformAssertions();
+        }
+
+        foreach ($filteredTabs as $tab) {
             $data = new ParameterBag($tab);
 
             try {
                 $this->invokeMethod($this->tabRegister, 'checkIsValid', [$moduleName, $data]);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $this->assertEquals($e->getMessage(), $tab['exception']);
 
                 continue;
@@ -328,7 +310,7 @@ class ModuleTabRegisterTest extends TestCase
     /**
      * Call protected/private method of a class.
      *
-     * @param object &$object Instantiated object that we will run method on
+     * @param object $object Instantiated object that we will run method on
      * @param string $methodName Method name to call
      * @param array $parameters array of parameters to pass into method
      *
@@ -336,11 +318,10 @@ class ModuleTabRegisterTest extends TestCase
      *
      * @see https://jtreminio.com/2013/03/unit-testing-tutorial-part-3-testing-protected-private-methods-coverage-reports-and-crap/
      */
-    protected function invokeMethod(&$object, string $methodName, array $parameters = [])
+    protected function invokeMethod(object $object, string $methodName, array $parameters = [])
     {
-        $reflection = new \ReflectionClass(get_class($object));
+        $reflection = new ReflectionClass(get_class($object));
         $method = $reflection->getMethod($methodName);
-        $method->setAccessible(true);
 
         return $method->invokeArgs($object, $parameters);
     }

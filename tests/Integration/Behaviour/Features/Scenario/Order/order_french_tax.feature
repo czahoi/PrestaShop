@@ -1,5 +1,5 @@
 # ./vendor/bin/behat -c tests/Integration/Behaviour/behat.yml -s order --tags order-french-tax
-@reset-database-before-feature
+@restore-all-tables-before-feature
 @clear-cache-before-feature
 @order-french-tax
 Feature: Order from Back Office (BO)
@@ -27,8 +27,9 @@ Feature: Order from Back Office (BO)
     And I select "FR" address as delivery and invoice address for customer "testCustomer" in cart "dummy_cart"
     And I add 2 products "Mug The best is yet to come" to the cart "dummy_cart"
     And a carrier "price_carrier" with name "My cheap carrier" exists
-    And I enable carrier "price_carrier"
-    And I associate the tax rule group "french-tax-group" to carrier "price_carrier"
+    And I edit carrier "price_carrier" with specified properties:
+      | active | true |
+    And I set tax rule "french-tax-group" for carrier "price_carrier"
     And I select carrier "price_carrier" for cart "dummy_cart"
     And cart "dummy_cart" should have "price_carrier" as a carrier
     And I add order "bo_order1" with the following details:

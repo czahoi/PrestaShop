@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context\Domain;
@@ -30,7 +10,7 @@ use Behat\Gherkin\Node\TableNode;
 use Configuration;
 use Order;
 use OrderSlip;
-use PHPUnit\Framework\Assert as Assert;
+use PHPUnit\Framework\Assert;
 use PrestaShop\PrestaShop\Core\Domain\Order\Command\CancelOrderProductCommand;
 use PrestaShop\PrestaShop\Core\Domain\Order\Command\IssuePartialRefundCommand;
 use PrestaShop\PrestaShop\Core\Domain\Order\Command\IssueReturnProductCommand;
@@ -167,10 +147,10 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
     /**
      * @Given :orderReference has :creditSlipNumber credit slips
      *
-     * @param $orderReference
+     * @param string $orderReference
      * @param int $creditSlipNumber
      */
-    public function checkOrderRefundsNumber($orderReference, int $creditSlipNumber)
+    public function checkOrderRefundsNumber(string $orderReference, int $creditSlipNumber): void
     {
         $orderId = SharedStorage::getStorage()->get($orderReference);
 
@@ -185,10 +165,10 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
     /**
      * @Given :orderReference last credit slip is:
      *
-     * @param $orderReference
+     * @param string $orderReference
      * @param TableNode $table
      */
-    public function checkOrderRefunds($orderReference, TableNode $table)
+    public function checkOrderRefunds(string $orderReference, TableNode $table): void
     {
         $orderId = SharedStorage::getStorage()->get($orderReference);
         $refundData = $table->getRowsHash();
@@ -214,7 +194,7 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
     /**
      * @Given return product is enabled
      */
-    public function enabledReturnProduct()
+    public function enabledReturnProduct(): void
     {
         Configuration::set('PS_ORDER_RETURN', 1);
     }
@@ -234,12 +214,13 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
      */
     public function assertLastErrorIsRefundQuantityTooHigh(int $maxRefund)
     {
-        $this->assertLastErrorIs(
+        /** @var InvalidCancelProductException $lastError */
+        $lastError = $this->assertLastErrorIs(
             InvalidCancelProductException::class,
             InvalidCancelProductException::QUANTITY_TOO_HIGH
         );
-        if ($maxRefund !== $this->getLastException()->getRefundableQuantity()) {
-            throw new RuntimeException(sprintf('Invalid refundable quantity in exception, expected %s but got %s', $maxRefund, $this->getLastException()->getRefundableQuantity()));
+        if ($maxRefund !== $lastError->getRefundableQuantity()) {
+            throw new RuntimeException(sprintf('Invalid refundable quantity in exception, expected %s but got %s', $maxRefund, $lastError->getRefundableQuantity()));
         }
     }
 
@@ -326,7 +307,7 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
      * @param bool $generateCreditSlip
      * @param bool $generateVoucher
      * @param int $voucherRefundType
-     * @param float|null $voucherRefundAmount
+     * @param string|null $voucherRefundAmount
      *
      * @return IssuePartialRefundCommand
      *
@@ -340,7 +321,7 @@ class OrderRefundFeatureContext extends AbstractDomainFeatureContext
         bool $generateCreditSlip,
         bool $generateVoucher,
         int $voucherRefundType = VoucherRefundType::PRODUCT_PRICES_EXCLUDING_VOUCHER_REFUND,
-        ?float $voucherRefundAmount = null
+        ?string $voucherRefundAmount = null
     ): IssuePartialRefundCommand {
         /** @var OrderForViewing $orderForViewing */
         $orderForViewing = $this->getQueryBus()->handle(new GetOrderForViewing((int) $orderId));

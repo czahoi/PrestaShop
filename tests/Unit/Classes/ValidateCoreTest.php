@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\Classes;
@@ -37,11 +17,6 @@ class ValidateCoreTest extends TestCase
     public function testIsIp2Long($expected, $input)
     {
         $this->assertEquals($expected, Validate::isIp2Long($input));
-    }
-
-    public function testIsAnything()
-    {
-        $this->assertTrue(Validate::isAnything());
     }
 
     /**
@@ -125,6 +100,7 @@ class ValidateCoreTest extends TestCase
 
     /**
      * @depends testIsFloat
+     *
      * @dataProvider isOptFloatDataProvider
      */
     public function testIsOptFloat($expected, $input)
@@ -141,6 +117,44 @@ class ValidateCoreTest extends TestCase
     public function testIsArrayWithIds(bool $expected, $input)
     {
         $this->assertSame($expected, Validate::isArrayWithIds($input));
+    }
+
+    /**
+     * @dataProvider isUrlDataProvider
+     *
+     * @param bool $expected
+     * @param string $url
+     */
+    public function testIsUrl(bool $expected, string $url): void
+    {
+        $this->assertEquals($expected, Validate::isUrl($url));
+    }
+
+    public function isUrlDataProvider(): iterable
+    {
+        yield 'test quick access link' => [
+            true,
+            'index.php?controller=AdminCartRules&addcart_rule',
+        ];
+    }
+
+    /**
+     * @dataProvider isCarrierTrackingUrlDataProvider
+     */
+    public function testIsCarrierTrackingUrl(bool $expected, ?string $url): void
+    {
+        $this->assertSame($expected, Validate::isCarrierTrackingUrl($url));
+    }
+
+    public static function isCarrierTrackingUrlDataProvider(): iterable
+    {
+        yield 'empty' => [true, ''];
+        yield 'null' => [true, null];
+        yield 'placeholder only' => [false, '{order_id}'];
+        yield 'tracking number' => [true, 'https://example.com/track.php?num=@'];
+        yield 'all placeholders' => [true, 'https://example.com/{country_iso}/track/@?order={order_id}&ref={order_reference}&zip={postcode}'];
+        yield 'unknown placeholder' => [false, 'https://example.com/track.php?num=@&name={lastname}'];
+        yield 'relative' => [false, 'track.php?num=@'];
     }
 
     public function isIp2LongDataProvider()
@@ -211,33 +225,33 @@ class ValidateCoreTest extends TestCase
     public function isCustomerNameDataProvider()
     {
         return [
-            [1, 'Mathieu'],
-            [1, 'Dupont'],
-            [1, 'Jaçinthé'],
-            [1, 'Jaçinthø'],
-            [1, 'John D.'],
-            [1, 'John D. John'],
-            [1, 'John D. John D.'],
-            [1, 'Mario Bros.'],
-            [1, 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â'],
-            [0, 'https://www.website.com'],
-            [0, 'www.website.com'],
-            [0, 'www\.website\.com'],
-            [0, 'www\\.website\\.com'],
-            [0, 'www.website.com.'],
-            [0, 'website。com'],
-            [0, 'John D.John'],
-            [0, 'John D. www.some.site'],
-            [0, 'www.website.com is cool'],
-            [0, 'website。com。'],
-            [0, 'website。com'],
-            [0, 'website%2Ecom'],
-            [0, 'website/./com'],
-            [0, '.rn'],
-            [0, 'websitecom/a'],
-            [0, 'websitecom%20a'],
-            [0, '`hello'],
-            [0, 'hello[my friend]'],
+            [true, 'Mathieu'],
+            [true, 'Dupont'],
+            [true, 'Jaçinthé'],
+            [true, 'Jaçinthø'],
+            [true, 'John D.'],
+            [true, 'John D. John'],
+            [true, 'John D. John D.'],
+            [true, 'Mario Bros.'],
+            [true, 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â'],
+            [false, 'https://www.website.com'],
+            [false, 'www.website.com'],
+            [false, 'www\.website\.com'],
+            [false, 'www\\.website\\.com'],
+            [false, 'www.website.com.'],
+            [false, 'website。com'],
+            [false, 'John D.John'],
+            [false, 'John D. www.some.site'],
+            [false, 'www.website.com is cool'],
+            [false, 'website。com。'],
+            [false, 'website。com'],
+            [false, 'website%2Ecom'],
+            [false, 'website/./com'],
+            [false, '.rn'],
+            [false, 'websitecom/a'],
+            [false, 'websitecom%2falsea'],
+            [false, '`hello'],
+            [false, 'hello[my friend]'],
         ];
     }
 
@@ -251,10 +265,10 @@ class ValidateCoreTest extends TestCase
             [true, 'john#doe@prestashop.com'],
             [false, ''],
             [false, 'john.doe@prestashop,com'],
-            [true, 'john.doe@prestashop'],
+            [false, 'john.doe@prestashop'],
             [true, 'john.doe@сайт.рф'],
             [true, 'john.doe@xn--80aswg.xn--p1ai'],
-            [false, 'иван@prestashop.com'], // rfc6531 valid but not swift mailer compatible
+            [false, 'иван@prestashop.com'], // rfc6531 valid but not cyrillic mailer compatible
             [true, 'xn--80adrw@prestashop.com'],
             [true, 'xn--80adrw@xn--80aswg.xn--p1ai'],
             [false, 123456789],
@@ -300,7 +314,7 @@ class ValidateCoreTest extends TestCase
             [false, date('Y-m-d', strtotime('+1 year +1 month'))],
             [false, date('Y-m-d', strtotime('+1 year +1 month -1 day'))],
             [false, date('Y-m-d', strtotime('+1 year +1 month +1 day'))],
-            [false, date('Y-m-d', strtotime('-201 year'))],
+            [false, date('Y-m-d', strtotime('-121 year'))],
         ];
     }
 

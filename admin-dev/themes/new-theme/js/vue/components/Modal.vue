@@ -1,26 +1,6 @@
-<!--**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+<!--*
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  *-->
 <template>
   <div>
@@ -34,7 +14,7 @@
             class="modal-content"
             aria-labelledby="modalTitle"
             aria-describedby="modalDescription"
-            v-click-outside="close"
+            v-click-outside="clickOutsideClose"
           >
             <header
               class="modal-header"
@@ -70,7 +50,7 @@
                   @click.prevent.stop="close"
                   aria-label="Close modal"
                 >
-                  {{ closeLabel }}
+                  {{ $t(closeLabel) }}
                 </button>
               </slot>
 
@@ -84,7 +64,7 @@
                   @click.prevent.stop="close"
                   aria-label="Close modal"
                 >
-                  {{ cancelLabel }}
+                  {{ $t(cancelLabel) }}
                 </button>
 
                 <button
@@ -92,7 +72,7 @@
                   class="btn btn-primary"
                   @click.prevent.stop="confirm"
                 >
-                  {{ confirmLabel }}
+                  {{ $t(confirmLabel) }}
                 </button>
               </slot>
             </footer>
@@ -108,12 +88,21 @@
   </div>
 </template>
 
-<script>
-  import '@vue/directives/click-outside';
+<script lang="ts">
+  import ClickOutside from '@PSVue/directives/click-outside';
+  import {defineComponent} from 'vue';
 
-  export default {
+  export default defineComponent({
     name: 'Modal',
+    directives: {
+      ClickOutside,
+    },
     props: {
+      closeOnClickOutside: {
+        type: Boolean,
+        required: false,
+        default: true,
+      },
       confirmation: {
         type: Boolean,
         required: false,
@@ -123,21 +112,21 @@
         type: String,
         required: false,
         default() {
-          return this.$t('modal.cancel');
+          return 'modal.cancel';
         },
       },
       confirmLabel: {
         type: String,
         required: false,
         default() {
-          return this.$t('modal.apply');
+          return 'modal.apply';
         },
       },
       closeLabel: {
         type: String,
         required: false,
         default() {
-          return this.$t('modal.close');
+          return 'modal.close';
         },
       },
       modalTitle: {
@@ -149,14 +138,19 @@
       },
     },
     methods: {
-      close() {
+      clickOutsideClose(): void {
+        if (this.closeOnClickOutside) {
+          this.$emit('close');
+        }
+      },
+      close(): void {
         this.$emit('close');
       },
-      confirm() {
+      confirm(): void {
         this.$emit('confirm');
       },
     },
-  };
+  });
 </script>
 
 <style lang="scss" scoped>

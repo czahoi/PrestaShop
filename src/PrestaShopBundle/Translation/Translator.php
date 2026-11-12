@@ -1,32 +1,12 @@
 <?php
-
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShopBundle\Translation;
 
+use PrestaShopBundle\Translation\Loader\ExtraPropertyTranslationLoader;
 use Symfony\Bundle\FrameworkBundle\Translation\Translator as BaseTranslator;
 
 /**
@@ -37,12 +17,54 @@ class Translator extends BaseTranslator implements TranslatorInterface
     use PrestaShopTranslatorTrait;
     use TranslatorLanguageTrait;
 
+    private ?ExtraPropertyTranslationLoader $extraPropertyTranslationLoader = null;
+
+    /**
+     * Injected via OverrideTranslatorServiceCompilerPass (the FrameworkBundle builds this service
+     * with a fixed constructor signature, so the dependency is set through a method call instead).
+     */
+    public function setExtraPropertyTranslationLoader(ExtraPropertyTranslationLoader $extraPropertyTranslationLoader): void
+    {
+        $this->extraPropertyTranslationLoader = $extraPropertyTranslationLoader;
+    }
+
     /**
      * {@inheritdoc}
+     *
+     * Completes the catalogue being built, so the additions are baked into the compiled (cached)
+     * catalogue (dumpCatalogue() calls this method and dumps $this->catalogues[$locale] right after):
+     *  - the database translations (ps_translation) are merged once, after every resource is loaded,
+     *    so they override the sources of every domain whenever the resources were registered;
+     *  - the extra property registry wordings are merged last, NON-overwriting: a wording equal to a
+     *    key another resource already defines (core or module XLF, an admin translation) resolves to
+     *    that existing translation instead of replacing it with its untranslated source, so a
+     *    definition author cannot un-translate core strings shop-wide by declaring a core domain.
+     *
+     * Only real locales are handled: the "default" pseudo-locale is not a database language. Each
+     * real-locale catalogue carries the source wordings (key == value) directly, so trans()
+     * resolves them without ever needing the fallback catalogue.
      */
-    public function addResource($format, $resource, $locale, $domain = null)
+    protected function initializeCatalogue(string $locale): void
     {
-        parent::addResource($format, $resource, $locale, $domain);
-        parent::addResource('db', $domain . '.' . $locale . '.db', $locale, $domain);
+        parent::initializeCatalogue($locale);
+
+        if (in_array($locale, $this->getFallbackLocales(), true)) {
+            return;
+        }
+
+        $this->addDatabaseTranslations($locale);
+
+        if (null === $this->extraPropertyTranslationLoader) {
+            return;
+        }
+        $catalogue = $this->catalogues[$locale];
+        foreach ($this->extraPropertyTranslationLoader->getNormalizedDomains($locale) as $domain) {
+            $wordings = $this->extraPropertyTranslationLoader->load('extra_property', $locale, $domain)->all($domain);
+            foreach ($wordings as $id => $message) {
+                if (!$catalogue->defines((string) $id, $domain)) {
+                    $catalogue->set((string) $id, $message, $domain);
+                }
+            }
+        }
     }
 }

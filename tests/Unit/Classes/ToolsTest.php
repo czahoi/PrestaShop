@@ -1,36 +1,21 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\Classes;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use ReflectionParameter;
+use Tests\Resources\TestCase\ExtendedTestCaseMethodsTrait;
 use Tools;
 
 class ToolsTest extends TestCase
 {
+    use ExtendedTestCaseMethodsTrait;
+
     private const PS_ROUND_UP = 0;
     private const PS_ROUND_DOWN = 1;
     private const PS_ROUND_HALF_UP = 2;
@@ -103,11 +88,11 @@ class ToolsTest extends TestCase
         $this->setPostAndGet([
             '' => true,
             ' ' => true,
-            null => true,
         ]);
 
         $this->assertFalse(Tools::getValue('', true));
         $this->assertTrue(Tools::getValue(' '));
+        /* @phpstan-ignore-next-line : null for first parameter is there for testing the return value */
         $this->assertFalse(Tools::getValue(null, true));
     }
 
@@ -261,7 +246,7 @@ class ToolsTest extends TestCase
     public function testSpreadAmount(array $expectedRows, float $amount, int $precision, array $rows, string $column): void
     {
         Tools::spreadAmount($amount, $precision, $rows, $column);
-        $this->assertEquals(array_values($expectedRows), array_values($rows));
+        $this->assertEqualsWithEpsilon(array_values($expectedRows), array_values($rows));
     }
 
     /**
@@ -320,6 +305,7 @@ class ToolsTest extends TestCase
             ['product_attribute', 'productAttribute', false],
             ['product_attribute_combination', 'productAttributeCombination', false],
             ['product_attribute_image', 'productAttributeImage', false],
+            ['product_attribute_lang', 'productAttributeLang', false],
             ['product_lang', 'productLang', false],
             ['product_supplier', 'productSupplier', false],
             ['profile_lang', 'profileLang', false],
@@ -335,17 +321,12 @@ class ToolsTest extends TestCase
             ['stock_mvt_reason_lang', 'stockMvtReasonLang', false],
             ['store_lang', 'storeLang', false],
             ['supplier_lang', 'supplierLang', false],
-            ['supply_order_state', 'supplyOrderState', false],
-            ['supply_order_state_lang', 'supplyOrderStateLang', false],
             ['tab', 'tab', false],
             ['tax_lang', 'taxLang', false],
-            ['warehouse', 'warehouse', false],
             ['web_browser', 'webBrowser', false],
             ['zone', 'zone', false],
             // True
             ['supplier_lang', 'SupplierLang', true],
-            ['supply_order_state', 'SupplyOrderState', true],
-            ['supply_order_state_lang', 'SupplyOrderStateLang', true],
             ['tab', 'Tab', true],
         ];
     }
@@ -442,11 +423,13 @@ class ToolsTest extends TestCase
         $this->assertSame($expectedResult, Tools::round_helper($value, $mode));
     }
 
-    public function providerMathRound(): array
+    public function providerPsRound(): array
     {
         return [
             // 0 precision
-            [25, 25.32, 0, self::PS_ROUND_UP],
+            [25, 25.32, 0, self::PS_ROUND_DOWN],
+            [25, 25.52, 0, self::PS_ROUND_DOWN],
+            [26, 25.32, 0, self::PS_ROUND_UP],
             [26, 25.52, 0, self::PS_ROUND_UP],
             [25, 25.32, 0, self::PS_ROUND_HALF_DOWN],
             [25, 25.50, 0, self::PS_ROUND_HALF_DOWN],
@@ -457,7 +440,9 @@ class ToolsTest extends TestCase
             [26, 25.51, 0, self::PS_ROUND_HALF_ODD],
             [25, 25.49, 0, self::PS_ROUND_HALF_ODD],
             // 2 precision
-            [25.32, 25.321, 2, self::PS_ROUND_UP],
+            [25.32, 25.321, 2, self::PS_ROUND_DOWN],
+            [25.52, 25.525, 2, self::PS_ROUND_DOWN],
+            [25.33, 25.321, 2, self::PS_ROUND_UP],
             [25.53, 25.525, 2, self::PS_ROUND_UP],
             [25.32, 25.325, 2, self::PS_ROUND_HALF_DOWN],
             [25.5, 25.505, 2, self::PS_ROUND_HALF_DOWN],
@@ -471,10 +456,13 @@ class ToolsTest extends TestCase
     }
 
     /**
-     * @dataProvider providerMathRound
+     * @dataProvider providerPsRound
      */
-    public function testMathRound(float $expectedResult, float $value, int $precision, int $mode): void
+    public function testPsRound(float $expectedResult, float $value, int $precision, int $mode): void
     {
+        $this->assertSame($expectedResult, Tools::ps_round($value, $precision, $mode));
+
+        // This method is deprecated and will be removed in 10.0.0, we just keep the tests to avoid regressions
         $this->assertSame($expectedResult, Tools::math_round($value, $precision, $mode));
     }
 
@@ -521,7 +509,9 @@ class ToolsTest extends TestCase
      */
     public function testPasswdGen(string $expectedPassword, $passwordGenerated): void
     {
-        $this->assertRegExp($expectedPassword, $passwordGenerated, 'The password generated ' . $passwordGenerated . ' no match with ' . $expectedPassword);
+        $message = 'The password generated ' . $passwordGenerated . ' no match with ' . $expectedPassword;
+
+        $this->assertMatchesRegularExpression($expectedPassword, $passwordGenerated, $message);
     }
 
     public function passwordGenProvider(): array
@@ -570,5 +560,713 @@ class ToolsTest extends TestCase
             [false, 'http://'],
             [null, 'http://'],
         ];
+    }
+
+    /**
+     * @param int $expectedReturn
+     * @param array{"price_tmp": float} $a
+     * @param array{"price_tmp": float} $b
+     *
+     * @dataProvider providerCmpPriceAsc
+     */
+    public function testCmpPriceAsc(int $expectedReturn, $a, $b): void
+    {
+        $this->assertSame($expectedReturn, cmpPriceAsc($a, $b));
+    }
+
+    public function providerCmpPriceAsc(): iterable
+    {
+        yield [-1, ['price_tmp' => -0.001], ['price_tmp' => 0]];
+        yield [0, ['price_tmp' => 0], ['price_tmp' => 0]];
+        yield [1, ['price_tmp' => 0.001], ['price_tmp' => 0]];
+    }
+
+    /**
+     * @param int $expectedReturn
+     * @param array{"price_tmp": float} $a
+     * @param array{"price_tmp": float} $b
+     *
+     * @dataProvider providerCmpPriceDesc
+     */
+    public function testCmpPriceDesc(int $expectedReturn, $a, $b): void
+    {
+        $this->assertSame($expectedReturn, cmpPriceDesc($a, $b));
+    }
+
+    public function providerCmpPriceDesc(): iterable
+    {
+        yield [1, ['price_tmp' => -0.001], ['price_tmp' => 0]];
+        yield [0, ['price_tmp' => 0], ['price_tmp' => 0]];
+        yield [-1, ['price_tmp' => 0.001], ['price_tmp' => 0]];
+    }
+
+    /**
+     * @param string $expected
+     * @param string $chars
+     *
+     * @dataProvider providerReplaceAccentedChars
+     */
+    public function testReplaceAccentedChars(string $expected, string $chars): void
+    {
+        $this->assertSame(str_repeat($expected, mb_strlen($chars)), Tools::replaceAccentedChars($chars));
+    }
+
+    public function providerReplaceAccentedChars(): array
+    {
+        return [
+            ['(C)', '©'],
+            ['a', 'aàáâãäåāăąǎǟǡǻȁȃȧάαаأაḁẚạảấầẩẫậắằẳẵⱥａя'],
+            ['A', 'AÀÁÂÃÄÅĀĂĄǍǞǠǺȀȂȦȺΆΑАḀẠẢẤẦẨẪẬẮẰẲẴẶἈἊἌᾸᾹᾺＡЯ'],
+            ['aa', 'ꜳ'],
+            ['AA', 'Ꜳ'],
+            ['ae', 'æǣǽ'],
+            ['AE', 'ÆǢǼ'],
+            ['ao', 'ꜵ'],
+            ['AO', 'Ꜵ'],
+            ['au', 'ꜷ'],
+            ['AU', 'Ꜷ'],
+            ['av', 'ꜹꜻ'],
+            ['AV', 'ꜸꜺ'],
+            ['ay', 'ꜽ'],
+            ['AY', 'Ꜽ'],
+            ['b', 'bƀƃɓβϐбبბḃḅḇｂ'],
+            ['B', 'BƁƂɃБḂḄḆＢΒ'],
+            ['c', 'cçćĉċčƈȼцћḉｃч'],
+            ['C', 'CÇĆĈĊČƇȻЋЦḈＣЧ'],
+            ['ch', 'χ'],
+            ['CH', 'Χ'],
+            ['d', 'dðďđƌɖɗδḏḑḋḍḓꝺｄضђџдدდ'],
+            ['D', 'DÐĎĐƉƊƋΔДḊḌḎḐḒꝹＤЂЏ'],
+            ['dh', 'ذ'],
+            ['dz', 'ǆǳძ'],
+            ['Dz', 'ǅǲ'],
+            ['DZ', 'ǄǱ'],
+            ['e', 'eèéêëēĕėęěȅȇȩɇɛέεеэეḕḗḙḛḝẹẻẽếềểễệἐἒἔὲｅёє'],
+            ['E', 'EÈÉÊËĒĔĖĘĚƐȄȆȨΈΕЕЭḔḖḘḚḜẸẺẼẾỀỂỄỆἘἚἜῈＥЁЄ'],
+            ['f', 'fƒфفḟꝼｆ'],
+            ['F', 'FƑФḞꝻＦ'],
+            ['ff', 'ﬀ'],
+            ['fi', 'ﬁ'],
+            ['fl', 'ﬂ'],
+            ['ffi', 'ﬃ'],
+            ['ffl', 'ﬄ'],
+            ['st', 'ﬅﬆ'],
+            ['g', 'gĝğġģǥǧǵɠγгґგḡꞡｇ'],
+            ['G', 'GĜĞĠĢƓǤǦǴΓГҐḠꞠＧ'],
+            ['gh', 'غ'],
+            ['h', 'хhĥħȟحهჰḣḥḧḩḫẖⱨｈ'],
+            ['H', 'ХHĤĦȞḢḤḦḨḪⱧＨ'],
+            ['hv', 'ƕ'],
+            ['i', 'iìíîïĩīĭįıǐȉȋɨΐίιϊиіიḭḯỉịἰἲἴἶῐῑῒῖῗｉї'],
+            ['I', 'IÌÍÎÏĨĪĬĮİƗǏȈȊΊΙΪІИḬḮỈỊῘῙῚＩЇ'],
+            ['ij', 'ĳ'],
+            ['IJ', 'Ĳ'],
+            ['j', 'jĵǰɉйјჯｊ'],
+            ['J', 'JĴɈЙЈＪ'],
+            ['k', 'kķƙǩκкḱḳḵⱪꝁꝃꝅꞣｋ'],
+            ['K', 'KĶƘǨΚКḰḲḴⱩꝀꝂꝄꞢＫ'],
+            ['kh', 'خ'],
+            ['l', 'lĺļľŀłƚɫλлلლḷḹḻḽⱡꝇꝉｌљ'],
+            ['L', 'LĹĻĽĿŁȽΛЛḶḸḺḼⱠⱢꝆꝈＬЉ'],
+            ['lj', 'ǉ'],
+            ['Lj', 'ǈ'],
+            ['LJ', 'Ǉ'],
+            ['m', 'mɱμмمმḿṁṃｍ'],
+            ['M', 'MΜМḾṀṂⱮＭ'],
+            ['n', 'nñńņňŋƞǹɲνнنნṅṇṉṋꞑꞥｎњ'],
+            ['N', 'NÑŃŅŇŊƝǸΝНṄṆṈṊꞐꞤＮЊ'],
+            ['nj', 'ǌ'],
+            ['Nj', 'ǋ'],
+            ['NJ', 'Ǌ'],
+            ['o', 'oòóôõöøōŏőơǒǫǭǿȍȏȫȭȯȱοωόώоṍṏṑṓọỏốồổỗộớờởꝋꝍｏ'],
+            ['O', 'OÒÓÔÕÖØŌŎŐƠǑǪǬǾȌȎȪȬȮȰΌΏΟΩОṌṎṐṒỌỎỐỒỔỖỘỚỜỞỠỢὈꝊꝌＯὊὌὨὪὬ'],
+            ['oe', 'œ'],
+            ['OE', 'Œ'],
+            ['oi', 'ƣ'],
+            ['OI', 'Ƣ'],
+            ['oo', 'ꝏ'],
+            ['OO', 'Ꝏ'],
+            ['p', 'pƥπпფᵽṕṗꝑꝓꝕｐ'],
+            ['P', 'PƤΠПṔṖⱣꝐꝒꝔＰ'],
+            ['ph', 'φ'],
+            ['PH', 'Φ'],
+            ['ps', 'ψ'],
+            ['PS', 'Ψ'],
+            ['q', 'qꝗꝙｑ'],
+            ['Q', 'QꝖꝘＱ'],
+            ['r', 'rŕŗřȑȓɍɽρрرრṙṛṝṟῤꞧｒ'],
+            ['R', 'RŔŖŘȐȒɌΡРṘṚṜṞⱤꞦＲ'],
+            ['rh', 'ῥ'],
+            ['RH', 'Ῥ'],
+            ['s', 'sśŝşšſșȿςσсسصსṡṣṥṧṩẛꞩｓшщ'],
+            ['S', 'SŚŜŞŠȘΣСṠṢṤṦṨⱾꞨＳШЩ'],
+            ['sh', 'შ'],
+            ['ss', 'ß'],
+            ['SS', 'ẞ'],
+            ['sh', 'ش'],
+            ['t', 'tţťŧƭțʈτтṭṯṱẗⱦꞇｔتطთ'],
+            ['T', 'TŢŤŦƬƮȚȾΤТṪṬṮṰꞆＴ'],
+            ['th', 'θþϑث'],
+            ['TH', 'ÞΘ'],
+            ['u', 'uùúûüũūŭůűųưǔǖǘǚǜȕȗʉуუṳṵṷṹṻụủứừửữựｕю'],
+            ['U', 'UÙÚÛÜŨŪŬŮŰŲƯǓǕǗǙǛȔȖɄУṲṴṶṸṺỤỦỨỪỬỮỰＵЮ'],
+            ['v', 'vʋвვṽṿꝟｖ'],
+            ['V', 'VƲВṼṾꝞＶ'],
+            ['vy', 'ꝡ'],
+            ['VY', 'Ꝡ'],
+            ['w', 'wŵẁẃẅẇẉẘⱳｗ'],
+            ['W', 'WŴẀẂẄẆẈⱲＷ'],
+            ['x', 'xẋẍｘξ'],
+            ['X', 'XẊẌＸΞ'],
+            ['y', 'yýÿŷƴȳɏΰϋύыيẏẙỳỵỷỹỿὐｙῢῦῧὺῠῡυ'],
+            ['Y', 'YÝŶŸƳȲɎΎΫϒЫẎỲỴỶỸῨῩῪＹΥ'],
+            ['z', 'zźżžƶȥɀζзزზẑẓẕⱬｚжظ'],
+            ['Z', 'ZŹŻŽƵȤΖЗẐẒẔⱫⱿＺЖ'],
+            ['zh', 'ჟ'],
+        ];
+    }
+
+    /**
+     * @param array $expectedResult
+     * @param array $originalArray
+     * @param string $insertedArrayKey Key of the inserted array
+     * @param array $insertedArrayData Which data insert to new array?
+     * @param string $key Where to insert the new array?
+     *
+     * @dataProvider providerArrayInsertElementAfterKey
+     */
+    public function testArrayInsertElementAfterKey(array $expectedResult, array $originalArray, string $insertedArrayKey, array $insertedArrayData, string $key): void
+    {
+        $this->assertSame($expectedResult, Tools::arrayInsertElementAfterKey($originalArray, $key, $insertedArrayKey, $insertedArrayData));
+    }
+
+    public function providerArrayInsertElementAfterKey(): iterable
+    {
+        $originalArray = [
+            'field1' => [
+                'value1',
+            ],
+            'field2' => [
+                'value2',
+            ],
+            'field3' => [
+                'value3',
+            ],
+        ];
+
+        yield [
+            [
+                'field1' => [
+                    'value1',
+                ],
+                'field2' => [
+                    'value2',
+                ],
+                'field0' => [
+                    'value0',
+                ],
+                'field3' => [
+                    'value3',
+                ],
+            ],
+            $originalArray,
+            'field0',
+            [
+                'value0',
+            ],
+            'field2',
+        ];
+
+        yield [
+            [
+                'field1' => [
+                    'value1',
+                ],
+                'field2' => [
+                    'value2',
+                ],
+                'field3' => [
+                    'value3',
+                ],
+                'field0' => [
+                    'value0',
+                ],
+            ],
+            $originalArray,
+            'field0',
+            [
+                'value0',
+            ],
+            'field3',
+        ];
+
+        yield [
+            $originalArray, // The field does not exist, we return an original array
+            $originalArray,
+            'field0',
+            [
+                'value0',
+            ],
+            'field4',
+        ];
+    }
+
+    /**
+     * This test verifies the rewrite rules to be written in the .htaccess file against the expected url segments
+     *
+     * @see Tools::generateHtaccess
+     *
+     * @dataProvider provideHtaccessRules
+     */
+    public function testHtaccessRewriteRules(string $rule, string $replacement, array $testCases)
+    {
+        $rule = "~$rule~";
+        foreach ($testCases as $setName => $case) {
+            if ($case['shouldMatch']) {
+                $this->assertMatchesRegularExpression($rule, $case['uri'], "The uri segment is expected to match the pattern, but it doesn't");
+            } else {
+                $this->assertDoesNotMatchRegularExpression($rule, $case['uri'], 'The uri segment is expected NOT to match the pattern, but it does');
+            }
+
+            if ($case['shouldMatch']) {
+                $result = preg_replace($rule, $replacement, $case['uri']);
+                $this->assertSame($case['rewritten'], $result);
+            }
+        }
+    }
+
+    public function provideHtaccessRules()
+    {
+        return [
+            'legacy product images 1' => [
+                '^([a-z\d]+\-[a-z\d]+\-[-\w]*)/.+(\.(?:jpe?g|webp|png|avif))$',
+                '%{ENV:REWRITEBASE}img/p/$1$2',
+                [
+                    [
+                        'uri' => '123-something-foobar/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/123-something-foobar.jpg',
+                    ],
+                    [
+                        'uri' => '123-something-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/123-something-.jpg',
+                    ],
+                    [
+                        'uri' => '123-something/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'test-99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'test-99-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/test-99-.jpg',
+                    ],
+                    [
+                        'uri' => 'test123-foo2bar1-someThing_with_underscores-9-123/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/test123-foo2bar1-someThing_with_underscores-9-123.jpg',
+                    ],
+                    [
+                        'uri' => 'test123-foo2bar1-someThing_with_underscores-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/test123-foo2bar1-someThing_with_underscores-.jpg',
+                    ],
+                    [
+                        'uri' => '123-Something-foobar/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'r-f-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/r-f-.jpg',
+                    ],
+                    [
+                        'uri' => 'r-f/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => '99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'test/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                ],
+            ],
+
+            'legacy product images 2' => [
+                '^([\d]+(?:\-[\d]+){1,2})/.+(\.(?:jpe?g|webp|png|avif))$',
+                '%{ENV:REWRITEBASE}img/p/$1$2',
+                [
+                    [
+                        'uri' => '123-456-7/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/123-456-7.jpg',
+                    ],
+                    [
+                        'uri' => '123-456/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/123-456.jpg',
+                    ],
+                    [
+                        'uri' => '123-/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => '123/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                ],
+            ],
+
+            'product images (single digit)' => [
+                '^(([\d])(?:\-[\w-]*)?)/.+(\.(?:jpe?g|webp|png|avif))$$',
+                '%{ENV:REWRITEBASE}img/p/$2/$1$3',
+                [
+                    [
+                        'uri' => '1-soMeTh1ng_cool22-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/1-soMeTh1ng_cool22-99.jpg',
+                    ],
+                    [
+                        'uri' => '9-soMeTh1ng_cool22-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/9/9-soMeTh1ng_cool22-.jpg',
+                    ],
+                    [
+                        'uri' => '9-soMeTh1ng_cool22/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/9/9-soMeTh1ng_cool22.jpg',
+                    ],
+                    [
+                        'uri' => '1-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/1-.jpg',
+                    ],
+                    [
+                        'uri' => '1/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/1.jpg',
+                    ],
+                ],
+            ],
+
+            'product images (7 digits)' => [
+                '^(([\d])([\d])([\d])([\d])([\d])([\d])([\d])(?:\-[\w-]*)?)/.+(\.(?:jpe?g|webp|png|avif))$',
+                '%{ENV:REWRITEBASE}img/p/$2/$3/$4/$5/$6/$7/$8/$1$9',
+                [
+                    [
+                        'uri' => '1234567-soMeTh1ng_cool22-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/2/3/4/5/6/7/1234567-soMeTh1ng_cool22-99.jpg',
+                    ],
+                    [
+                        'uri' => '7654321-soMeTh1ng_cool22-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/7/6/5/4/3/2/1/7654321-soMeTh1ng_cool22-.jpg',
+                    ],
+                    [
+                        'uri' => '7654321-soMeTh1ng_cool22/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/7/6/5/4/3/2/1/7654321-soMeTh1ng_cool22.jpg',
+                    ],
+                    [
+                        'uri' => '1234567-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/2/3/4/5/6/7/1234567-.jpg',
+                    ],
+                    [
+                        'uri' => '1234567/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/p/1/2/3/4/5/6/7/1234567.jpg',
+                    ],
+                    [
+                        'uri' => '1234-soMeTh1ng_cool22-99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                ],
+            ],
+
+            'category images 1' => [
+                '^c/([\d]+)(\-[\.*\w-]*)/.+(\.(?:jpe?g|webp|png|avif))$',
+                '%{ENV:REWRITEBASE}img/c/$1$2.jpg',
+                [
+                    [
+                        'uri' => 'c/1234567-soMe.Th1n*g_cool22-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/1234567-soMe.Th1n*g_cool22-99.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1-foo-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/1-foo-99.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1-foo-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/1-foo-.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1-foo/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/1-foo.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/1-.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => '1-foo-99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'c/foo-99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                ],
+            ],
+
+            'category images 2' => [
+                '^c/([a-zA-Z_-]+)(-[\d]+)?/.+(\.(?:jpe?g|webp|png|avif))$',
+                '%{ENV:REWRITEBASE}img/c/$1$2$3',
+                [
+                    [
+                        'uri' => 'c/soMeThing_cool-test-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/soMeThing_cool-test-99.jpg',
+                    ],
+                    [
+                        'uri' => 'c/foo-99/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/foo-99.jpg',
+                    ],
+                    [
+                        'uri' => 'c/foo-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/foo-.jpg',
+                    ],
+                    [
+                        'uri' => 'c/-/totally-ignored.jpg',
+                        'shouldMatch' => true,
+                        'rewritten' => '%{ENV:REWRITEBASE}img/c/-.jpg',
+                    ],
+                    [
+                        'uri' => 'c/1-1/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => 'c/1/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                    [
+                        'uri' => '1-foo-99/totally-ignored.jpg',
+                        'shouldMatch' => false,
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    public function providerIsPublicIp(): array
+    {
+        return [
+            // Routable addresses, the only ones that must be accepted.
+            'ipv4 public' => [true, '8.8.8.8'],
+            'ipv4 public 2' => [true, '1.1.1.1'],
+            'ipv6 public' => [true, '2606:4700::1111'],
+            'ipv4-mapped public' => [true, '::ffff:8.8.8.8'],
+            '6to4 wrapping public ipv4' => [true, '2002:0808:0808::'],
+
+            // Plain IPv4 private/reserved ranges.
+            'loopback' => [false, '127.0.0.1'],
+            'rfc1918 10/8' => [false, '10.0.0.1'],
+            'rfc1918 172.16/12' => [false, '172.16.0.1'],
+            'rfc1918 192.168/16' => [false, '192.168.1.1'],
+            'cloud metadata' => [false, '169.254.169.254'],
+            'unspecified' => [false, '0.0.0.0'],
+            'broadcast' => [false, '255.255.255.255'],
+
+            // Plain IPv6 private/reserved ranges.
+            'ipv6 loopback' => [false, '::1'],
+            'ipv6 unique local' => [false, 'fc00::1'],
+            'ipv6 link local' => [false, 'fe80::1'],
+
+            // IPv6 notations that tunnel an IPv4 address: the IPv4 range flags of
+            // filter_var() do not apply to them, so they must be unwrapped first.
+            'ipv4-mapped cloud metadata' => [false, '::ffff:169.254.169.254'],
+            'ipv4-mapped loopback' => [false, '::ffff:127.0.0.1'],
+            'ipv4-mapped rfc1918' => [false, '::ffff:10.0.0.1'],
+            'ipv4-mapped rfc1918 2' => [false, '::ffff:192.168.1.1'],
+            'ipv4-mapped loopback hex' => [false, '0:0:0:0:0:ffff:7f00:1'],
+            'ipv4-compatible loopback' => [false, '::127.0.0.1'],
+            'ipv4-compatible rfc1918' => [false, '::10.0.0.1'],
+            'nat64 loopback' => [false, '64:ff9b::7f00:1'],
+            'nat64 rfc1918' => [false, '64:ff9b::a00:1'],
+            '6to4 loopback' => [false, '2002:7f00:0001::'],
+
+            // Non-routable ranges that filter_var() alone lets through.
+            'shared address space' => [false, '100.64.0.1'],
+            'ietf protocol assignments' => [false, '192.0.0.1'],
+            'test-net-1' => [false, '192.0.2.1'],
+            'benchmarking' => [false, '198.18.0.1'],
+            'test-net-2' => [false, '198.51.100.1'],
+            'test-net-3' => [false, '203.0.113.1'],
+            'ipv4 multicast' => [false, '224.0.0.1'],
+            'ipv4 multicast top' => [false, '239.255.255.255'],
+            'ipv6 multicast' => [false, 'ff02::1'],
+            'ipv6 discard only' => [false, '100::1'],
+            'ipv6 site local' => [false, 'fec0::1'],
+            'teredo' => [false, '2001::1'],
+
+            // Not addresses at all.
+            'hostname' => [false, 'not-an-ip'],
+            'empty' => [false, ''],
+            'out of range octets' => [false, '999.999.999.999'],
+        ];
+    }
+
+    /**
+     * @dataProvider providerIsPublicIp
+     */
+    public function testIsPublicIp(bool $expected, string $ip): void
+    {
+        $this->assertSame($expected, Tools::isPublicIp($ip));
+    }
+
+    /**
+     * Same vectors as providerIsPublicIp, minus the values that are not IP literals:
+     * those would send resolvePublicIps() down the DNS path, which has no place in a
+     * unit test.
+     */
+    public function providerResolvePublicIpsOnLiteral(): array
+    {
+        return array_filter(
+            $this->providerIsPublicIp(),
+            function (array $case) {
+                return (bool) filter_var($case[1], FILTER_VALIDATE_IP);
+            }
+        );
+    }
+
+    /**
+     * An IP literal is validated directly, without any DNS lookup, and is refused
+     * whenever it is not publicly routable.
+     *
+     * @dataProvider providerResolvePublicIpsOnLiteral
+     */
+    public function testResolvePublicIpsOnLiteral(bool $expectedPublic, string $ip): void
+    {
+        $this->assertSame(
+            $expectedPublic ? [$ip] : [],
+            Tools::resolvePublicIps($ip)
+        );
+    }
+
+    /**
+     * Every accepted scheme must map to a usable default port, otherwise building the
+     * CURLOPT_RESOLVE pin for a URL without an explicit port breaks.
+     */
+    public function testEveryAllowedSchemeHasADefaultPort(): void
+    {
+        foreach (Tools::UNTRUSTED_URL_ALLOWED_SCHEMES as $scheme => $port) {
+            // @phpstan-ignore method.alreadyNarrowedType
+            $this->assertIsInt($port, "scheme $scheme must map to an int port");
+            $this->assertGreaterThan(0, $port, "scheme $scheme must map to a valid port");
+        }
+    }
+
+    /**
+     * The allow-list must not accept anything the CURLPROTO_* mask does not, otherwise a URL
+     * passes our validation only for curl to refuse it -- or worse, gets fetched with an
+     * unintended protocol on a build where CURLPROTO_HTTP is undefined and no mask applies.
+     * sftp in particular must stay out.
+     */
+    public function testAllowedSchemesAreAllPermittedCurlProtocols(): void
+    {
+        $this->assertSame(
+            [],
+            array_diff(array_keys(Tools::UNTRUSTED_URL_ALLOWED_SCHEMES), ['http', 'https', 'ftp', 'ftps'])
+        );
+    }
+
+    /**
+     * @dataProvider providerUntrustedUrlScheme
+     */
+    public function testIsUntrustedUrlSchemeAllowed(bool $expected, string $scheme): void
+    {
+        $this->assertSame($expected, Tools::isUntrustedUrlSchemeAllowed($scheme));
+    }
+
+    public function providerUntrustedUrlScheme(): array
+    {
+        return [
+            'http' => [true, 'http'],
+            'https' => [true, 'https'],
+            'uppercase is normalised' => [true, 'HTTPS'],
+            'ftp' => [true, 'ftp'],
+            'ftps' => [true, 'ftps'],
+            // curl is not allowed to speak these, so they must not pass validation either.
+            'sftp' => [false, 'sftp'],
+            'scp' => [false, 'scp'],
+            // PHP stream wrappers, the whole point of the allow-list.
+            'file' => [false, 'file'],
+            'phar' => [false, 'phar'],
+            'data' => [false, 'data'],
+            'gopher' => [false, 'gopher'],
+            'zip' => [false, 'zip'],
+            'empty' => [false, ''],
+        ];
+    }
+
+    /**
+     * Tools::copy() is overridden in the wild (override/classes/Tools.php). Adding a
+     * parameter to it makes every such override a fatal "declaration must be compatible"
+     * error, so the SSRF-hardened variant lives in its own method instead. Same reasoning
+     * for file_get_contents(), which is overridden just as often. These tests exist to stop
+     * the parameter from creeping back in.
+     */
+    public function testCopySignatureIsUnchangedForBackwardCompatibility(): void
+    {
+        $copy = new ReflectionMethod(Tools::class, 'copy');
+
+        $this->assertSame(3, $copy->getNumberOfParameters());
+        $this->assertSame(2, $copy->getNumberOfRequiredParameters());
+        $this->assertSame(
+            ['source', 'destination', 'stream_context'],
+            array_map(function (ReflectionParameter $p) {
+                return $p->getName();
+            }, $copy->getParameters())
+        );
+    }
+
+    public function testFileGetContentsSignatureIsUnchangedForBackwardCompatibility(): void
+    {
+        $method = new ReflectionMethod(Tools::class, 'file_get_contents');
+
+        $this->assertSame(5, $method->getNumberOfParameters());
+        $this->assertSame(1, $method->getNumberOfRequiredParameters());
+    }
+
+    /**
+     * The hardened variant must be publicly reachable, since the Symfony adapter
+     * (PrestaShop\PrestaShop\Adapter\Tools) delegates to it.
+     */
+    public function testCopyFromUntrustedSourceIsPublicStatic(): void
+    {
+        $method = new ReflectionMethod(Tools::class, 'copyFromUntrustedSource');
+
+        $this->assertTrue($method->isPublic());
+        $this->assertTrue($method->isStatic());
+        $this->assertSame(2, $method->getNumberOfParameters());
     }
 }

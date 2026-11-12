@@ -1,34 +1,13 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
 namespace Tests\Unit\Core\Grid\Column;
 
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use PrestaShop\PrestaShop\Core\Grid\Column\ColumnCollection;
 use PrestaShop\PrestaShop\Core\Grid\Column\ColumnInterface;
@@ -36,7 +15,7 @@ use PrestaShop\PrestaShop\Core\Grid\Exception\ColumnNotFoundException;
 
 class ColumnCollectionTest extends TestCase
 {
-    public function testItAddsColumnsToCollection()
+    public function testItAddsColumnsToCollection(): ColumnCollection
     {
         $columns = (new ColumnCollection())
             ->add($this->createColumnMock('first'))
@@ -55,7 +34,7 @@ class ColumnCollectionTest extends TestCase
     /**
      * @depends testItAddsColumnsToCollection
      */
-    public function testItAddsColumnsBeforeGivenColumn(ColumnCollection $columns)
+    public function testItAddsColumnsBeforeGivenColumn(ColumnCollection $columns): ColumnCollection
     {
         $columns
             ->addBefore('first', $this->createColumnMock('before_first'))
@@ -77,7 +56,7 @@ class ColumnCollectionTest extends TestCase
     /**
      * @depends testItAddsColumnsBeforeGivenColumn
      */
-    public function testItAddsColumnsAfterGivenColumn(ColumnCollection $columns)
+    public function testItAddsColumnsAfterGivenColumn(ColumnCollection $columns): ColumnCollection
     {
         $columns
             ->addAfter('first', $this->createColumnMock('after_first'))
@@ -102,7 +81,7 @@ class ColumnCollectionTest extends TestCase
     /**
      * @depends testItAddsColumnsAfterGivenColumn
      */
-    public function testItRemovesColumnById(ColumnCollection $columns)
+    public function testItRemovesColumnById(ColumnCollection $columns): void
     {
         $columns->remove('first');
         $columns->remove('third');
@@ -111,7 +90,7 @@ class ColumnCollectionTest extends TestCase
         $this->assertCount(7, $columns);
     }
 
-    public function testMixingMethodsProducesCollectionWithCorrectColumnPositions()
+    public function testMixingMethodsProducesCollectionWithCorrectColumnPositions(): void
     {
         $columns = (new ColumnCollection())
             ->add($this->createColumnMock('first'))
@@ -140,12 +119,12 @@ class ColumnCollectionTest extends TestCase
         ], $this->getColumnPositions($columns));
     }
 
-    public function testNumericColumnIdAreAccepted()
+    public function testNumericColumnIdAreAccepted(): void
     {
         $columns = (new ColumnCollection())
             ->add($this->createColumnMock(3))
-            ->addAfter(3, $this->createColumnMock(1))
-            ->addBefore(3, $this->createColumnMock(2))
+            ->addAfter('3', $this->createColumnMock(1))
+            ->addBefore('3', $this->createColumnMock(2))
             ->add($this->createColumnMock('second'))
             ->addAfter('second', $this->createColumnMock(9))
             ->addBefore('second', $this->createColumnMock('7'))
@@ -162,21 +141,21 @@ class ColumnCollectionTest extends TestCase
         ], $this->getColumnPositions($columns));
     }
 
-    public function testItThrowsExceptionWhenAddingColumnAfterNonExistingColumn()
+    public function testItThrowsExceptionWhenAddingColumnAfterNonExistingColumn(): void
     {
         $this->expectException(ColumnNotFoundException::class);
 
         (new ColumnCollection())->addAfter('non_existing', $this->createColumnMock('first'));
     }
 
-    public function testItThrowsExceptionWhenAddingColumnBeforeNonExistingColumn()
+    public function testItThrowsExceptionWhenAddingColumnBeforeNonExistingColumn(): void
     {
         $this->expectException(ColumnNotFoundException::class);
 
         (new ColumnCollection())->addBefore('non_existing', $this->createColumnMock('first'));
     }
 
-    public function testColumnsCanBeRetrievedAsArray()
+    public function testColumnsCanBeRetrievedAsArray(): void
     {
         $columns = (new ColumnCollection())
             ->add($this->createColumnMock('test_1'))
@@ -189,7 +168,7 @@ class ColumnCollectionTest extends TestCase
         $this->assertCount(3, $columnsArray);
     }
 
-    public function testAColumnCanBeMoved()
+    public function testAColumnCanBeMoved(): void
     {
         $columns = (new ColumnCollection())
             ->add($this->createColumnMock('test_1'))
@@ -201,7 +180,8 @@ class ColumnCollectionTest extends TestCase
             ->add($this->createColumnMock('test_7'))
         ;
 
-        $columns->move('test_1', 1)
+        $columns
+            ->move('test_1', 1)
             ->move('test_5', 0)
             ->move('test_2', 4)
         ;
@@ -219,7 +199,7 @@ class ColumnCollectionTest extends TestCase
         $this->assertCount(7, $columns);
     }
 
-    public function testColumnMoveWithInvalidIdWillThrowsAnException()
+    public function testColumnMoveWithInvalidIdWillThrowsAnException(): void
     {
         $this->expectException(ColumnNotFoundException::class);
 
@@ -232,11 +212,11 @@ class ColumnCollectionTest extends TestCase
     }
 
     /**
-     * @param string $id
+     * @param int|string $id
      *
-     * @return MockObject|ColumnInterface
+     * @return ColumnInterface
      */
-    private function createColumnMock($id)
+    private function createColumnMock($id): ColumnInterface
     {
         $column = $this->createMock(ColumnInterface::class);
         $column->method('getId')
@@ -250,7 +230,7 @@ class ColumnCollectionTest extends TestCase
      *
      * @return string[]
      */
-    private function getColumnPositions(ColumnCollection $columns)
+    private function getColumnPositions(ColumnCollection $columns): array
     {
         $positions = [];
 
@@ -267,7 +247,7 @@ class ColumnCollectionTest extends TestCase
      * @param ColumnCollection $columnCollection
      * @param string $columnId
      */
-    private function assertValidColumnWithId(ColumnCollection $columnCollection, $columnId)
+    private function assertValidColumnWithId(ColumnCollection $columnCollection, string $columnId): void
     {
         $this->assertSame($columnCollection->current()->getId(), $columnId);
     }

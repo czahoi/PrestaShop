@@ -1,43 +1,20 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context;
 
 use Cart;
 use Context;
-use Tests\Integration\Utility\CartOld;
+use PHPUnit\Framework\Assert;
+use PrestaShop\Decimal\DecimalNumber;
+use RuntimeException;
 
 class CartFeatureContext extends AbstractPrestaShopFeatureContext
 {
     use CartAwareTrait;
-
-    /**
-     * @var CartOld
-     */
-    protected $cart;
 
     /**
      * @Then there is no delivery options available for my cart
@@ -45,13 +22,13 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
     public function noDeliveryOptions()
     {
         if ($this->getCurrentCart() === null) {
-            throw new \RuntimeException('No current cart, cannot check available delivery options');
+            throw new RuntimeException('No current cart, cannot check available delivery options');
         }
 
         $deliveryOptions = $this->getCurrentCart()->getDeliveryOptionList();
 
         if (!empty($deliveryOptions)) {
-            throw new \RuntimeException('Expected no available delivery options, but there are some !');
+            throw new RuntimeException('Expected no available delivery options, but there are some !');
         }
     }
 
@@ -63,13 +40,13 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
     public function deliveryOptionsAreAvailable()
     {
         if ($this->getCurrentCart() === null) {
-            throw new \RuntimeException('No current cart, cannot check available delivery options');
+            throw new RuntimeException('No current cart, cannot check available delivery options');
         }
 
         $deliveryOptions = $this->getCurrentCart()->getDeliveryOptionList();
 
         if (empty($deliveryOptions)) {
-            throw new \RuntimeException('Expected available delivery options, but there are none !');
+            throw new RuntimeException('Expected available delivery options, but there are none !');
         }
     }
 
@@ -78,7 +55,7 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
      */
     public function iHaveAnEmptyDefaultCart()
     {
-        $cart = new CartOld();
+        $cart = new Cart();
         $cart->id_lang = (int) Context::getContext()->language->id;
         $cart->id_currency = (int) Context::getContext()->currency->id;
         $cart->id_shop = (int) Context::getContext()->shop->id;
@@ -111,7 +88,7 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
     {
         $currentCartProducts = $this->getCurrentCart()->getProducts(true);
         if ($productCount != count($currentCartProducts)) {
-            throw new \RuntimeException(sprintf('Expects %s, got %s instead', $productCount, count($currentCartProducts)));
+            throw new RuntimeException(sprintf('Expects %s, got %s instead', $productCount, count($currentCartProducts)));
         }
     }
 
@@ -122,7 +99,7 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
     {
         $currentCartProducts = Cart::getNbProducts($this->getCurrentCart()->id);
         if ($productCount != $currentCartProducts) {
-            throw new \RuntimeException(sprintf('Expects %s, got %s instead', $productCount, $currentCartProducts));
+            throw new RuntimeException(sprintf('Expects %s, got %s instead', $productCount, $currentCartProducts));
         }
     }
 
@@ -131,15 +108,7 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
      */
     public function totalCartWithTaxShouldBe($precisely, $expectedTotal)
     {
-        $this->expectsTotal($expectedTotal, 'v2', true, !empty($precisely));
-    }
-
-    /**
-     * @Then /^my cart total using previous calculation method should be (precisely )?(\d+\.\d+) tax included$/
-     */
-    public function totalCartWithTaxOnPreviousCaclculationMethodShouldBe($precisely, $expectedTotal)
-    {
-        $this->expectsTotal($expectedTotal, 'v1', true, !empty($precisely));
+        $this->expectsTotal($expectedTotal, true, !empty($precisely));
     }
 
     /**
@@ -147,33 +116,21 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
      */
     public function totalCartWithoutTaxShouldBe($precisely, $expectedTotal)
     {
-        $this->expectsTotal($expectedTotal, 'v2', false, !empty($precisely));
+        $this->expectsTotal($expectedTotal, false, !empty($precisely));
     }
 
-    /**
-     * @Then /^my cart total using previous calculation method should be (precisely )?(\d+\.\d+) tax excluded$/
-     */
-    public function totalCartWithoutTaxOnPreviousCaclculationMethodShouldBe($precisely, $expectedTotal)
-    {
-        $this->expectsTotal($expectedTotal, 'v1', false, !empty($precisely));
-    }
-
-    protected function expectsTotal($expectedTotal, $method, $withTax = true, $precisely = false)
+    protected function expectsTotal($expectedTotal, $withTax = true, $precisely = false)
     {
         $cart = $this->getCurrentCart();
         $carrierId = (int) $cart->id_carrier <= 0 ? null : $cart->id_carrier;
-        if ($method == 'v1') {
-            $total = $cart->getOrderTotalV1($withTax, Cart::BOTH, null, $carrierId);
-        } else {
-            $total = $cart->getOrderTotal($withTax, Cart::BOTH, null, $carrierId);
-        }
+        $total = $cart->getOrderTotal($withTax, Cart::BOTH, null, $carrierId);
         if (!$precisely) {
             // here we round values to avoid round issues : rounding modes are tested by specific tests
             $expectedTotal = round($expectedTotal, 1);
             $total = round($total, 1);
         }
         if ($expectedTotal != $total) {
-            throw new \RuntimeException(sprintf('Expects %s, got %s instead', $expectedTotal, $total));
+            throw new RuntimeException(sprintf('Expects %s, got %s instead', $expectedTotal, $total));
         }
     }
 
@@ -194,7 +151,32 @@ class CartFeatureContext extends AbstractPrestaShopFeatureContext
         $expectedTotal = round($expectedShippingFees, 1);
         $shippingFees = round($this->getCurrentCart()->getPackageShippingCost($this->getCurrentCart()->id_carrier, $withTaxes), 1);
         if ($expectedTotal != $shippingFees) {
-            throw new \RuntimeException(sprintf('Expects %s, got %s instead', $expectedTotal, $shippingFees));
+            throw new RuntimeException(sprintf('Expects %s, got %s instead', $expectedTotal, $shippingFees));
         }
+    }
+
+    /**
+     * @todo: check if possible to unify this step with calculateCartShippingFees() so that they produce the same result (maybe selecting currency and address is missing?)
+     *
+     * @Then /^my cart total shipping fees should be (\d+\.\d+) tax (excluded|included)?$/
+     */
+    public function assertTotalCartShipping(string $expectedShipping, bool $taxIncluded): void
+    {
+        $cart = $this->getCurrentCart();
+        $expectedTotal = new DecimalNumber($expectedShipping);
+        // using ONLY_SHIPPING will not reduce discounts, so this method is not suitable to assert free_shipping discount application
+        $actualTotal = new DecimalNumber((string) $cart->getOrderTotal($taxIncluded, Cart::ONLY_SHIPPING));
+
+        Assert::assertSame((string) $expectedTotal, (string) $actualTotal, 'Unexpected total cart shipping');
+    }
+
+    /**
+     * @Then /^I should have a voucher named "(.+)" with (\d+\.\d+) of discount$/
+     */
+    public function cartVoucher($voucherName, $discountAmount)
+    {
+        $cartRules = $this->getCurrentCart()->getCartRules();
+        Assert::assertEquals($cartRules[0]['code'], $voucherName);
+        Assert::assertEquals((float) $cartRules[0]['value_real'], (float) $discountAmount);
     }
 }

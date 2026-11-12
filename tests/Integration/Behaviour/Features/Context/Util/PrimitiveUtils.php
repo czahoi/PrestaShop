@@ -1,46 +1,27 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context\Util;
 
+use DateTime;
 use Exception;
 use RuntimeException;
 
 class PrimitiveUtils
 {
-    const TYPE_BOOLEAN = 'boolean';
-    const TYPE_INTEGER = 'integer';
-    const TYPE_DOUBLE = 'double';
-    const TYPE_STRING = 'string';
-    const TYPE_DATETIME = 'datetime';
-    const TYPE_ARRAY = 'array';
-    const TYPE_NULL = 'NULL';
-    const TYPE_OBJECT = 'object';
-    const TYPE_RESOURCE = 'resource';
-    const TYPE_UNKNOWN = 'unknown type';
+    public const TYPE_BOOLEAN = 'boolean';
+    public const TYPE_INTEGER = 'integer';
+    public const TYPE_DOUBLE = 'double';
+    public const TYPE_STRING = 'string';
+    public const TYPE_DATETIME = 'datetime';
+    public const TYPE_ARRAY = 'array';
+    public const TYPE_NULL = 'NULL';
+    public const TYPE_OBJECT = 'object';
+    public const TYPE_RESOURCE = 'resource';
+    public const TYPE_UNKNOWN = 'unknown type';
 
     /**
      * @param mixed $element
@@ -53,25 +34,18 @@ class PrimitiveUtils
         switch ($type) {
             case self::TYPE_BOOLEAN:
                 return self::castStringBooleanIntoBoolean($element);
-                break;
 
             case self::TYPE_INTEGER:
                 return intval($element);
-                break;
 
             case self::TYPE_DOUBLE:
                 return floatval($element);
-                break;
 
             case self::TYPE_STRING:
                 return $element;
-                break;
 
             case self::TYPE_DATETIME:
-                $dateTime = new \DateTime($element);
-
-                return $dateTime;
-                break;
+                return new DateTime($element);
 
             case self::TYPE_ARRAY:
                 if ('empty' === $element) {
@@ -81,10 +55,7 @@ class PrimitiveUtils
                     return $element;
                 }
 
-                $exploded = explode('; ', $element);
-
-                return $exploded;
-                break;
+                return explode('; ', $element);
 
             case self::TYPE_NULL:
                 if (('null' === $element) || ('Null' === $element) || ('NULL' === $element)) {
@@ -93,21 +64,19 @@ class PrimitiveUtils
                     return $element;
                 }
 
-            // no break
+                // no break
             case self::TYPE_OBJECT:
             case self::TYPE_RESOURCE:
             case self::TYPE_UNKNOWN:
                 throw new Exception("Cannot cast element into type $type");
-                break;
-
             default:
                 throw new RuntimeException("Unexpected cast type $type, function gettype is not supposed to return it");
         }
     }
 
     /**
-     * @param mixed $element1
-     * @param mixed $element2
+     * @param mixed|DateTime $element1
+     * @param mixed|DateTime $element2
      *
      * @return bool
      */
@@ -117,34 +86,26 @@ class PrimitiveUtils
             return false;
         }
 
-        $type = gettype($element1);
-        $isADateTime = (($type === self::TYPE_OBJECT) && (get_class($element1) === 'DateTime'));
-        if ($isADateTime) {
-            $type = self::TYPE_DATETIME;
+        if ($element1 instanceof DateTime && $element2 instanceof DateTime) {
+            return $element1->format('YmdHis') === $element2->format('YmdHis');
         }
 
+        $type = gettype($element1);
         switch ($type) {
             case self::TYPE_BOOLEAN:
             case self::TYPE_INTEGER:
                 return $element1 === $element2;
-                break;
             case self::TYPE_DOUBLE:
                 // see http://php.net/manual/en/language.types.float.php#language.types.float.comparison
                 $epsilon = 0.00001;
 
                 return abs($element1 - $element2) < $epsilon;
-                break;
-
-            case self::TYPE_DATETIME:
-                return $element1->format('YmdHis') === $element2->format('YmdHis');
-                break;
 
             case self::TYPE_STRING:
                 $cleanedString1 = trim($element1);
                 $cleanedString2 = trim($element2);
 
                 return $cleanedString1 === $cleanedString2;
-                break;
 
             case self::TYPE_ARRAY:
                 $castedArray1 = self::castArrayElementsIntoString($element1);
@@ -154,22 +115,18 @@ class PrimitiveUtils
                 sort($castedArray2);
 
                 return $castedArray1 === $castedArray2;
-                break;
 
             case self::TYPE_OBJECT:
             case self::TYPE_RESOURCE:
             case self::TYPE_NULL:
                 if ((null === $element1) && (null === $element2)) {
                     return true;
-                } else {
-                    return false;
                 }
-                break;
+
+                return false;
 
             case self::TYPE_UNKNOWN:
                 throw new Exception("Cannot compare elements of type $type");
-                break;
-
             default:
                 throw new RuntimeException("Unexpected type $type, function gettype is not supposed to return it");
         }
@@ -270,6 +227,6 @@ class PrimitiveUtils
      */
     public static function generateRandomString(int $length): string
     {
-        return bin2hex(random_bytes(round($length / 2)));
+        return bin2hex(random_bytes((int) round($length / 2)));
     }
 }

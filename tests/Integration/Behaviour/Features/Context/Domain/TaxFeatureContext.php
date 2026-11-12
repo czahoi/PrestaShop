@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context\Domain;
@@ -40,35 +20,38 @@ use PrestaShop\PrestaShop\Core\Domain\Tax\ValueObject\TaxId;
 use RuntimeException;
 use State;
 use Tax;
+use TaxCalculator;
 use TaxRule;
 use TaxRulesGroup;
-use Tests\Integration\Behaviour\Features\Context\CommonFeatureContext;
 use Tests\Integration\Behaviour\Features\Context\SharedStorage;
 use Tests\Integration\Behaviour\Features\Context\Util\NoExceptionAlthoughExpectedException;
 use Tests\Integration\Behaviour\Features\Context\Util\PrimitiveUtils;
+use Tests\Resources\Resetter\TaxesResetter;
 
 class TaxFeatureContext extends AbstractDomainFeatureContext
 {
     /**
-     * @var int default language id from configuration
+     * @BeforeFeature @restore-taxes-before-feature
      */
-    private $defaultLangId;
-
-    public function __construct()
+    public static function restoreTaxesTablesBeforeFeature(): void
     {
-        $this->defaultLangId = CommonFeatureContext::getContainer()
-            ->get('prestashop.adapter.legacy.configuration')
-            ->get('PS_LANG_DEFAULT');
+        TaxesResetter::resetTaxes();
+    }
+
+    /**
+     * @AfterFeature @restore-taxes-after-feature
+     */
+    public static function restoreTaxesTablesAfterFeature(): void
+    {
+        TaxesResetter::resetTaxes();
     }
 
     /**
      * @When I add new tax :taxReference with following properties:
      */
-    public function createTax($taxReference, TableNode $table)
+    public function createTax(string $taxReference, TableNode $table): void
     {
-        $data = $table->getRowsHash();
-
-        $this->createTaxUsingCommand($taxReference, $data);
+        $this->createTaxUsingCommand($taxReference, $table->getRowsHash());
     }
 
     /**
@@ -83,10 +66,10 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
         $taxId = (int) $tax->id;
         $command = new EditTaxCommand($taxId);
         if (isset($data['name'])) {
-            $command->setLocalizedNames([$this->defaultLangId => $data['name']]);
+            $command->setLocalizedNames([$this->getDefaultLangId() => $data['name']]);
         }
         if (isset($data['rate'])) {
-            $command->setRate($data['rate']);
+            $command->setRate((float) $data['rate']);
         }
 
         if (isset($data['is_enabled'])) {
@@ -152,6 +135,7 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
      */
     public function bulkDeleteTax($taxReferences)
     {
+        $taxIds = [];
         foreach (PrimitiveUtils::castStringArrayIntoArray($taxReferences) as $taxReference) {
             $tax = SharedStorage::getStorage()->get($taxReference);
             $taxIds[] = (int) $tax->id;
@@ -194,7 +178,7 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
         /** @var Tax $tax */
         $tax = SharedStorage::getStorage()->get($taxReference);
 
-        if ($tax->name[$this->defaultLangId] !== $name) {
+        if ($tax->name[$this->getDefaultLangId()] !== $name) {
             throw new RuntimeException(sprintf('Tax "%s" has "%s" name, but "%s" was expected.', $taxReference, $tax->name, $name));
         }
     }
@@ -226,6 +210,7 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
 
     /**
      * @Then /^tax "(.*)" should be (enabled|disabled)?$/
+     *
      * @Given /^tax "(.*)" is (enabled|disabled)?$/
      */
     public function assertTaxStatus($taxReference, $status)
@@ -241,13 +226,13 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
     }
 
     /**
-     * @param $taxReference
+     * @param string $taxReference
      * @param array $data
      */
-    private function createTaxUsingCommand($taxReference, array $data)
+    private function createTaxUsingCommand(string $taxReference, array $data): void
     {
         $command = new AddTaxCommand(
-            [$this->defaultLangId => $data['name']],
+            [$this->getDefaultLangId() => $data['name']],
             $data['rate'],
             PrimitiveUtils::castStringBooleanIntoBoolean($data['is_enabled'])
         );
@@ -267,7 +252,7 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
 
         $taxRulesGroup = new TaxRulesGroup();
         $taxRulesGroup->name = $data['name'];
-        $taxRulesGroup->active = 1;
+        $taxRulesGroup->active = true;
         $taxRulesGroup->deleted = false;
         $taxRulesGroup->save();
         SharedStorage::getStorage()->set($taxGroupReference, $taxRulesGroup->id);
@@ -276,9 +261,36 @@ class TaxFeatureContext extends AbstractDomainFeatureContext
         $taxRule = new TaxRule();
         $taxRule->id_tax = $tax->id;
         $taxRule->id_tax_rules_group = $taxRulesGroup->id;
-        $taxRule->behavior = 1;
+        $taxRule->behavior = TaxCalculator::ONE_TAX_ONLY_METHOD;
         $taxRule->id_country = Country::getByIso($data['country']);
         $taxRule->id_state = isset($data['state']) ? State::getIdByIso($data['state']) : 0;
         $taxRule->save();
+    }
+
+    /**
+     * @Then I add the tax rule :taxReference for tax rule group :taxGroupReference:
+     */
+    public function addTaxRuleToTaxRulesGroup(string $taxGroupReference, string $taxReference, TableNode $table)
+    {
+        $data = $table->getRowsHash();
+        $taxGroupId = SharedStorage::getStorage()->get($taxGroupReference);
+
+        $tax = SharedStorage::getStorage()->get($taxReference);
+        $taxRule = new TaxRule();
+        $taxRule->id_tax = $tax->id;
+        $taxRule->id_tax_rules_group = $taxGroupId;
+        $taxRule->behavior = TaxCalculator::ONE_TAX_ONLY_METHOD;
+        $taxRule->id_country = Country::getByIso($data['country']);
+        $taxRule->id_state = isset($data['state']) ? State::getIdByIso($data['state']) : 0;
+        $taxRule->save();
+    }
+
+    /**
+     * @Then I delete tax rules that has tax :taxReference:
+     */
+    public function deleteTaxRuleFromTaxRulesGroup(string $taxReference)
+    {
+        $tax = SharedStorage::getStorage()->get($taxReference);
+        TaxRule::deleteTaxRuleByIdTax($tax->id);
     }
 }

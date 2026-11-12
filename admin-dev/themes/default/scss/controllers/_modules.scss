@@ -157,15 +157,15 @@ td.module_inactive {
 }
 
 .module-badge-popular {
-  background-color: $brand-addons;
+  background-color: var(--#{$cdk}blue-500);
 }
 
 .module-badge-partner {
-  background-color: $brand-primary;
+  background-color: var(--#{$cdk}primary-800);
 }
 
 .module-badge-bought {
-  background-color: $greenPrestashop;
+  background-color: var(--#{$cdk}primary-800);
 }
 
 .categoriesTitle {
@@ -226,22 +226,5 @@ td.module_inactive {
   .img-thumbnail {
     max-width: 60px;
     max-height: 60px;
-  }
-}
-
-.modules-addons-info {
-  text-align: center;
-
-  h4 {
-    margin-bottom: 0 !important;
-  }
-}
-
-.modules-addons-buttons {
-  text-align: center;
-
-  a {
-    margin-right: 10px;
-    text-transform: uppercase;
   }
 }

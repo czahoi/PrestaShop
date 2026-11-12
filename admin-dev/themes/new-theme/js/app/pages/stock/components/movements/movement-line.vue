@@ -1,29 +1,12 @@
-<!--**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+<!--*
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  *-->
 <template>
   <tr>
+    <td>
+      {{ product.product_id }}
+    </td>
     <td>
       <div class="d-flex align-items-center">
         <PSMedia
@@ -31,9 +14,12 @@
           :thumbnail="thumbnail"
         >
           <p>
-            {{ product.product_name }}
+            <a
+              :href="product.product_url"
+              class="product-name-link"
+            >{{ product.product_name }}</a>
             <small v-if="hasCombination"><br>
-              {{ combinationName }}
+              {{ product.combination_name }}
             </small>
           </p>
         </PSMedia>
@@ -63,7 +49,7 @@
       </span>
     </td>
     <td class="text-sm-center">
-      {{ dateAdd }}
+      {{ product.date_add_formatted }}
     </td>
     <td>
       {{ employeeName }}
@@ -72,14 +58,15 @@
 </template>
 
 <script lang="ts">
-  import Vue from 'vue';
-  import PSMedia from '@app/widgets/ps-media';
+  import PSMedia from '@app/widgets/ps-media.vue';
   import productDesc from '@app/pages/stock/mixins/product-desc';
+  import {defineComponent, PropType} from 'vue';
+  import {StockMovement} from './index.vue';
 
-  export default Vue.extend({
+  export default defineComponent({
     props: {
       product: {
-        type: Object,
+        type: Object as PropType<StockMovement>,
         required: true,
       },
     },
@@ -97,14 +84,23 @@
       orderLink(): string | null {
         return this.product.order_link !== 'N/A' ? this.product.order_link : null;
       },
-      dateAdd() {
-        const date = new Date(Date.parse(this.product.date_add));
-
-        return date.toLocaleDateString(window.data.locale, {});
-      },
     },
     components: {
       PSMedia,
     },
   });
 </script>
+
+<style lang="scss" scoped>
+@import '~@scss/config/_settings.scss';
+
+.product-name-link {
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--#{$cdk}primary-500);
+    text-decoration: underline;
+  }
+}
+</style>

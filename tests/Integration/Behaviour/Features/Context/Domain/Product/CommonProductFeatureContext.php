@@ -1,84 +1,63 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
 namespace Tests\Integration\Behaviour\Features\Context\Domain\Product;
 
-use Behat\Gherkin\Node\TableNode;
 use Language;
 use PHPUnit\Framework\Assert;
 use PrestaShop\PrestaShop\Core\Domain\Product\Exception\ProductConstraintException;
 use PrestaShop\PrestaShop\Core\Domain\Product\Exception\ProductNotFoundException;
+use PrestaShop\PrestaShop\Core\Domain\Product\QueryResult\ProductForEditing;
 use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductType;
 use Product;
 use RuntimeException;
-use Tests\Integration\Behaviour\Features\Context\Util\CombinationDetails;
-use Tests\Integration\Behaviour\Features\Context\Util\ProductCombinationFactory;
 use Tests\Integration\Behaviour\Features\Transform\LocalizedArrayTransformContext;
+use Tests\Resources\DatabaseDump;
+use Tests\Resources\Resetter\ConfigurationResetter;
+use Tests\Resources\Resetter\LanguageResetter;
+use Tests\Resources\Resetter\ProductResetter;
 
 class CommonProductFeatureContext extends AbstractProductFeatureContext
 {
     /**
-     * @Given product :productReference has following combinations:
+     * @todo: since product suite is the only one that has been properly optimized for now it is less resilient than
+     *        other suites which simply restore all tables. Each suite should be responsible for cleaning up its mess
+     *        but since it's not the case for now product suite needs to restore the full DB itself.
      *
-     * @param string $productReference
-     * @param TableNode $tableNode
+     * @BeforeSuite
      */
-    public function addCombinationsToProduct(string $productReference, TableNode $tableNode): void
+    public static function restoreAllTablesBeforeSuite(): void
     {
-        $details = $tableNode->getColumnsHash();
-        $combinationsDetails = [];
-
-        foreach ($details as $combination) {
-            $combinationsDetails[] = new CombinationDetails(
-                $combination['reference'],
-                (int) $combination['quantity'],
-                explode(';', $combination['attributes'])
-            );
-        }
-
-        $combinations = ProductCombinationFactory::makeCombinations(
-            $this->getSharedStorage()->get($productReference),
-            $combinationsDetails
-        );
-
-        foreach ($combinations as $combination) {
-            $this->getSharedStorage()->set($combination->reference, (int) $combination->id);
-        }
-
-        // Product class has a lot of cache that is set as soon as the product is created, including for prices
-        // which are cached for each combinations. Since it was cached when the combinations did not exist we need
-        // to clear it so that the newly created combinations' prices are correctly computed next time they are needed.
-        Product::resetStaticCache();
+        DatabaseDump::restoreAllTables();
     }
 
     /**
-     * @Then /^product "(.+)" localized "(.+)" should be:$/
-     * @Given /^product "(.+)" localized "(.+)" is:$/
+     * @AfterSuite
+     */
+    public static function restoreProductTablesAfterSuite(): void
+    {
+        ProductResetter::resetProducts();
+        LanguageResetter::resetLanguages();
+        ConfigurationResetter::resetConfiguration();
+    }
+
+    /**
+     * @BeforeFeature @restore-products-before-feature
+     */
+    public static function restoreProductTablesBeforeFeature(): void
+    {
+        ProductResetter::resetProducts();
+    }
+
+    /**
+     * @Then product :productReference localized :fieldName should be:
+     *
+     * @Given product :productReference localized :fieldName is:
      *
      * localizedValues transformation handled by @see LocalizedArrayTransformContext
      *
@@ -86,10 +65,37 @@ class CommonProductFeatureContext extends AbstractProductFeatureContext
      * @param string $fieldName
      * @param array $expectedLocalizedValues
      */
-    public function assertLocalizedProperty(string $productReference, string $fieldName, array $expectedLocalizedValues): void
+    public function assertLocalizedPropertyForDefaultShop(string $productReference, string $fieldName, array $expectedLocalizedValues): void
     {
         $productForEditing = $this->getProductForEditing($productReference);
+        $this->assertLocalizedProperty($productForEditing, $fieldName, $expectedLocalizedValues);
+    }
 
+    /**
+     * @Then product :productReference localized :fieldName for shop(s) :shopReferences should be:
+     *
+     * localizedValues transformation handled by @see LocalizedArrayTransformContext
+     *
+     * @param string $productReference
+     * @param string $fieldName
+     * @param array $expectedLocalizedValues
+     */
+    public function assertLocalizedPropertyForShops(string $productReference, string $fieldName, string $shopReferences, array $expectedLocalizedValues): void
+    {
+        $shopReferences = explode(',', $shopReferences);
+        foreach ($shopReferences as $shopReference) {
+            $shopId = $this->getSharedStorage()->get(trim($shopReference));
+            $productForEditing = $this->getProductForEditing(
+                $productReference,
+                $shopId
+            );
+
+            $this->assertLocalizedProperty($productForEditing, $fieldName, $expectedLocalizedValues);
+        }
+    }
+
+    private function assertLocalizedProperty(ProductForEditing $productForEditing, string $fieldName, array $expectedLocalizedValues): void
+    {
         if ('tags' === $fieldName) {
             UpdateTagsFeatureContext::assertLocalizedTags(
                 $expectedLocalizedValues,
@@ -139,12 +145,13 @@ class CommonProductFeatureContext extends AbstractProductFeatureContext
      */
     public function assertProductDoesNotExistAnymore(string $reference): void
     {
+        $caughtException = null;
         try {
             $this->getProductForEditing($reference);
-            throw new RuntimeException(sprintf('Product "%s" was not expected to exist, but it was found', $reference));
         } catch (ProductNotFoundException $e) {
-            // intentional. Means product is not found and test should pass
+            $caughtException = $e;
         }
+        Assert::assertNotNull($caughtException);
     }
 
     /**
@@ -153,25 +160,21 @@ class CommonProductFeatureContext extends AbstractProductFeatureContext
      * @param string $productReference
      * @param string $productTypeName
      */
-    public function assertProductType(string $productReference, string $productTypeName): void
+    public function assertProductTypeForDefaultShop(string $productReference, string $productTypeName): void
     {
-        $editableProduct = $this->getProductForEditing($productReference);
-        Assert::assertEquals(
-            $productTypeName,
-            $editableProduct->getType(),
-            sprintf(
-                'Product type is not as expected. Expected %s but got %s instead',
-                $productTypeName,
-                $editableProduct->getType()
-            )
-        );
-        $productId = $this->getSharedStorage()->get($productReference);
-        $product = new Product($productId);
-        Assert::assertEquals($productTypeName === ProductType::TYPE_VIRTUAL, (bool) $product->is_virtual);
-        // cache_is_pack is automatically updated by legacy code when removing all pack items so it's not worth testing it for now
-        // Assert::assertEquals($productTypeName === ProductType::TYPE_PACK, (bool) $product->cache_is_pack);
-        if ($productTypeName !== ProductType::TYPE_COMBINATIONS) {
-            Assert::assertEquals(0, $product->cache_default_attribute);
+        $this->assertProductType($productReference, $productTypeName, $this->getDefaultShopId());
+    }
+
+    /**
+     * @Then product :productReference type should be :productType for shop(s) :shopReferences
+     *
+     * @param string $productReference
+     * @param string $productTypeName
+     */
+    public function assertProductTypeForShops(string $productReference, string $productTypeName, string $shopReferences): void
+    {
+        foreach (explode(',', $shopReferences) as $shopReference) {
+            $this->assertProductType($productReference, $productTypeName, $this->getSharedStorage()->get(trim($shopReference)));
         }
     }
 
@@ -278,13 +281,21 @@ class CommonProductFeatureContext extends AbstractProductFeatureContext
      */
     public function assertIsIndexed(string $productReference): void
     {
-        $productId = $this->getSharedStorage()->get($productReference);
-        $product = new Product($productId);
-        Assert::assertSame(
-            1,
-            (int) $product->indexed,
-            sprintf('Unexpected indexed field value %s for product "%s"', $product->indexed, $productReference)
-        );
+        $this->assertIndexation($productReference, true);
+    }
+
+    /**
+     * @Then product :productReference should be indexed for shops :shopReferences
+     *
+     * @param string $productReference
+     * @param string $shopReferences
+     */
+    public function assertProductIsIndexedForShops(string $productReference, string $shopReferences): void
+    {
+        $shopReferences = explode(',', $shopReferences);
+        foreach ($shopReferences as $shopReference) {
+            $this->assertIndexation($productReference, true, $shopReference);
+        }
     }
 
     /**
@@ -294,12 +305,63 @@ class CommonProductFeatureContext extends AbstractProductFeatureContext
      */
     public function assertIsNotIndexed(string $productReference): void
     {
+        $this->assertIndexation($productReference, false);
+    }
+
+    /**
+     * @Then product :productReference should not be indexed for shops :shopReferences
+     *
+     * @param string $productReference
+     * @param string $shopReferences
+     */
+    public function assertProductNotIndexedForShops(string $productReference, string $shopReferences): void
+    {
+        $shopReferences = explode(',', $shopReferences);
+        foreach ($shopReferences as $shopReference) {
+            $this->assertIndexation($productReference, false, $shopReference);
+        }
+    }
+
+    /**
+     * @param string $productReference
+     * @param bool $expectedIsIndexed
+     * @param string|null $shopReference
+     */
+    private function assertIndexation(string $productReference, bool $expectedIsIndexed, ?string $shopReference = null): void
+    {
+        $productId = $this->getSharedStorage()->get($productReference);
+        $shopId = $shopReference ? $this->getSharedStorage()->get($shopReference) : null;
+        $product = new Product($productId, false, null, $shopId);
+        Assert::assertSame(
+            $expectedIsIndexed,
+            (bool) $product->indexed,
+            sprintf(
+                'Unexpected indexed field value %s for product "%s"%s',
+                $product->indexed,
+                $productReference,
+                $shopReference ? sprintf(' in shop %s', $shopReference) : ''
+            )
+        );
+    }
+
+    private function assertProductType(string $productReference, string $productTypeName, int $shopId): void
+    {
+        $editableProduct = $this->getProductForEditing($productReference, $shopId);
+        Assert::assertEquals(
+            $productTypeName,
+            $editableProduct->getType(),
+            sprintf(
+                'Product type is not as expected. Expected %s but got %s instead',
+                $productTypeName,
+                $editableProduct->getType()
+            )
+        );
         $productId = $this->getSharedStorage()->get($productReference);
         $product = new Product($productId);
-        Assert::assertSame(
-            0,
-            (int) $product->indexed,
-            sprintf('Unexpected indexed field value %s for product "%s"', $product->indexed, $productReference)
-        );
+        Assert::assertEquals($productTypeName === ProductType::TYPE_VIRTUAL, (bool) $product->is_virtual);
+        Assert::assertEquals($productTypeName === ProductType::TYPE_PACK, (bool) $product->cache_is_pack);
+        if ($productTypeName !== ProductType::TYPE_COMBINATIONS) {
+            Assert::assertEquals(0, $product->cache_default_attribute);
+        }
     }
 }

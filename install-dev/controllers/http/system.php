@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 use PrestaShopBundle\Install\System;
@@ -39,27 +19,23 @@ class InstallControllerHttpSystem extends InstallControllerHttp implements HttpC
     public $model_system;
 
     /**
-     * @see HttpConfigureInterface::init()
+     * @var array
      */
-    public function init()
+    public $tests_render;
+
+    /**
+     * {@inheritdoc}
+     */
+    public function init(): void
     {
         $this->model_system = new System();
         $this->model_system->setTranslator($this->translator);
     }
 
     /**
-     * @see HttpConfigureInterface::processNextStep()
+     * {@inheritdoc}
      */
-    public function processNextStep()
-    {
-    }
-
-    /**
-     * Required tests must be passed to validate this step
-     *
-     * @see HttpConfigureInterface::validate()
-     */
-    public function validate()
+    public function validate(): bool
     {
         $this->tests['required'] = $this->model_system->checkRequiredTests();
 
@@ -67,9 +43,9 @@ class InstallControllerHttpSystem extends InstallControllerHttp implements HttpC
     }
 
     /**
-     * Display system step
+     * {@inheritdoc}
      */
-    public function display()
+    public function display(): void
     {
         if (!isset($this->tests['required'])) {
             $this->tests['required'] = $this->model_system->checkRequiredTests();
@@ -81,7 +57,7 @@ class InstallControllerHttpSystem extends InstallControllerHttp implements HttpC
         $testsRequiredsf2 = $this->model_system->checkSf2Requirements();
         $testsOptionalsf2 = $this->model_system->checkSf2Recommendations();
 
-        if (!is_callable('getenv') || !($user = @getenv('APACHE_RUN_USER'))) {
+        if (!function_exists('getenv') || !($user = @getenv('APACHE_RUN_USER'))) {
             $user = 'Apache';
         }
 
@@ -99,6 +75,7 @@ class InstallControllerHttpSystem extends InstallControllerHttp implements HttpC
                         'gd' => $this->translator->trans('GD library is not installed', [], 'Install'),
                         'json' => $this->translator->trans('JSON extension is not loaded', [], 'Install'),
                         'openssl' => $this->translator->trans('PHP OpenSSL extension is not loaded', [], 'Install'),
+                        'openssl_key_generation' => $this->translator->trans('Unable to generate private keys using openssl_pkey_new. Check your OpenSSL configuration, especially the path to openssl.cafile.', [], 'Install'),
                         'pdo_mysql' => $this->translator->trans('PDO MySQL extension is not loaded', [], 'Install'),
                         'simplexml' => $this->translator->trans('SimpleXML extension is not loaded', [], 'Install'),
                         'zip' => $this->translator->trans('ZIP extension is not enabled', [], 'Install'),

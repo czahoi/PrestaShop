@@ -1,32 +1,13 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context;
 
 use Behat\Gherkin\Node\TableNode;
+use Db;
 use Exception;
 use PHPUnit\Framework\Assert;
 use PrestaShop\PrestaShop\Core\Domain\SqlManagement\Command\AddSqlRequestCommand;
@@ -37,7 +18,6 @@ use PrestaShop\PrestaShop\Core\Domain\SqlManagement\Query\GetDatabaseTableFields
 use PrestaShop\PrestaShop\Core\Domain\SqlManagement\ValueObject\DatabaseTableField;
 use PrestaShop\PrestaShop\Core\Domain\SqlManagement\ValueObject\SqlRequestId;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\Request;
 use Tests\Integration\Behaviour\Features\Context\Domain\AbstractDomainFeatureContext;
 
 /**
@@ -87,7 +67,7 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
      */
     public function resetStoredSqlRequest($count)
     {
-        $legacyDatabaseSingleton = \Db::getInstance(_PS_USE_SQL_SLAVE_);
+        $legacyDatabaseSingleton = Db::getInstance(_PS_USE_SQL_SLAVE_);
         $legacyDatabaseSingleton->delete('request_sql');
     }
 
@@ -96,7 +76,7 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
      */
     public function assertStoredSqlRequestCount($count)
     {
-        $legacyDatabaseSingleton = \Db::getInstance(_PS_USE_SQL_SLAVE_);
+        $legacyDatabaseSingleton = Db::getInstance(_PS_USE_SQL_SLAVE_);
         $realCountResults = $legacyDatabaseSingleton->executeS('SELECT COUNT(*) AS result FROM ' . _DB_PREFIX_ . 'request_sql');
 
         $realCount = current($realCountResults)['result'];
@@ -128,7 +108,7 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
     private function assertInstanceOf($expected, $subject)
     {
         if (get_class($subject) !== $expected) {
-            throw new RuntimeException(sprintf('Expects %s, got %s instead', $expected, $subject));
+            throw new RuntimeException(sprintf('Expects %s, got %s instead', $expected, get_class($subject)));
         }
     }
 
@@ -202,10 +182,10 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
      */
     public function assertLastErrorIsOnlySelectRequest(): void
     {
-        $this->assertLastErrorIs(SqlRequestConstraintException::class);
+        $lastError = $this->assertLastErrorIs(SqlRequestConstraintException::class);
         Assert::assertEquals(
             '"SELECT" does not exist.',
-            $this->getLastException()->getMessage()
+            $lastError->getMessage()
         );
     }
 
@@ -214,10 +194,10 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
      */
     public function assertLastErrorIsAMalformedSqlRequest(): void
     {
-        $this->assertLastErrorIs(SqlRequestConstraintException::class);
+        $lastError = $this->assertLastErrorIs(SqlRequestConstraintException::class);
         Assert::assertEquals(
             'Bad SQL query',
-            $this->getLastException()->getMessage()
+            $lastError->getMessage()
         );
     }
 
@@ -226,10 +206,10 @@ class SqlManagerFeatureContext extends AbstractDomainFeatureContext
      */
     public function assertLastErrorIsAnUnknownTable(string $tableName): void
     {
-        $this->assertLastErrorIs(SqlRequestConstraintException::class);
+        $lastError = $this->assertLastErrorIs(SqlRequestConstraintException::class);
         Assert::assertEquals(
             sprintf('The "%s" table does not exist.', $tableName),
-            $this->getLastException()->getMessage()
+            $lastError->getMessage()
         );
     }
 }

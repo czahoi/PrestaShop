@@ -1,36 +1,19 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 const {$}: Window = window;
 
 export default class AutocompleteWithEmail {
-  map: SelectorsMap;
+  map: Record<string, any>;
 
   $emailInput: JQuery;
 
-  constructor(emailInputSelector: string, map: SelectorsMap = {}) {
+  // Last value written in each field by the prefill, to tell it apart from a value typed by hand
+  private prefilledValues: Record<string, string> = {};
+
+  constructor(emailInputSelector: string, map: Record<string, any> = {}) {
     this.map = map;
     this.$emailInput = $(emailInputSelector);
     this.$emailInput.on('change', () => this.change());
@@ -47,7 +30,7 @@ export default class AutocompleteWithEmail {
       .then((response) => {
         Object.keys(this.map).forEach((key: string) => {
           if (response[key] !== undefined) {
-            $(this.map[key]).val(response[key]);
+            this.prefill(key, response[key]);
           }
         });
       })
@@ -56,5 +39,22 @@ export default class AutocompleteWithEmail {
           window.showErrorMessage(response.responseJSON.message);
         }
       });
+  }
+
+  /**
+   * The response comes back asynchronously, possibly after the field was filled by hand:
+   * only an empty field, or one still holding the previous prefill, is overwritten.
+   */
+  private prefill(key: string, value: string | null): void {
+    const $field = $(this.map[key]);
+    const currentValue = String($field.val() ?? '');
+
+    if (currentValue !== '' && currentValue !== this.prefilledValues[key]) {
+      return;
+    }
+
+    const newValue = value ?? '';
+    $field.val(newValue);
+    this.prefilledValues[key] = newValue;
   }
 }

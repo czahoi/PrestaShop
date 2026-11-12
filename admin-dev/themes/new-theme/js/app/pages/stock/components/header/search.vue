@@ -1,33 +1,13 @@
-<!--**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+<!--*
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  *-->
 <template>
   <div
     id="search"
     class="row mb-2"
   >
-    <div class="col-md-8">
+    <div class="col-md-12">
       <div class="mb-2">
         <form
           class="search-form"
@@ -53,7 +33,10 @@
           </div>
         </form>
       </div>
-      <Filters @applyFilter="applyFilter" />
+      <Filters
+        ref="filters"
+        @applyFilter="applyFilter"
+      />
     </div>
     <div class="col-md-4 alert-box">
       <transition name="fade">
@@ -72,14 +55,15 @@
 </template>
 
 <script lang="ts">
-  import Vue from 'vue';
-  import PSTags from '@app/widgets/ps-tags';
-  import PSButton from '@app/widgets/ps-button';
-  import PSAlert from '@app/widgets/ps-alert';
-  import {EventBus} from '@app/utils/event-bus';
-  import Filters from './filters';
+  import PSTags from '@app/widgets/ps-tags.vue';
+  import PSButton from '@app/widgets/ps-button.vue';
+  import PSAlert from '@app/widgets/ps-alert.vue';
+  import {EventEmitter} from '@components/event-emitter';
+  import {defineComponent} from 'vue';
+  import translate from '@app/pages/stock/mixins/translate';
+  import Filters, {FiltersInstanceType} from './filters.vue';
 
-  export default Vue.extend({
+  const Search = defineComponent({
     components: {
       Filters,
       PSTags,
@@ -87,10 +71,14 @@
       PSAlert,
     },
     computed: {
+      filtersRef(): FiltersInstanceType {
+        return <FiltersInstanceType>(this.$refs.filters);
+      },
       error(): boolean {
         return (this.alertType === 'ALERT_TYPE_DANGER');
       },
     },
+    mixins: [translate],
     methods: {
       onClick(): void {
         const refPsTags = this.$refs.psTags as VTags;
@@ -113,7 +101,7 @@
       },
     },
     mounted() {
-      EventBus.$on('displayBulkAlert', (type: string) => {
+      EventEmitter.on('displayBulkAlert', (type: string) => {
         this.alertType = type === 'success' ? 'ALERT_TYPE_SUCCESS' : 'ALERT_TYPE_DANGER';
         this.showAlert = true;
         setTimeout(() => {
@@ -130,4 +118,8 @@
       };
     },
   });
+
+  export type SearchInstanceType = InstanceType<typeof Search> | undefined;
+
+  export default Search;
 </script>

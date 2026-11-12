@@ -1,26 +1,6 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 /* eslint max-classes-per-file: ["error", 2] */
@@ -33,12 +13,14 @@ export interface ModalContainerType {
   message: HTMLElement;
   header: HTMLElement;
   title?: HTMLElement;
-  closeIcon: HTMLButtonElement;
+  closeIcon?: HTMLButtonElement;
 }
-export interface ModalType {
-  modal: ModalContainerType;
+export interface ModalCoreType {
   show: () => void;
   hide: () => void;
+}
+export interface ModalType extends ModalCoreType {
+  modal: ModalContainerType;
   render: (content: string) => void;
 }
 export type CssProps = Record<string, string>;
@@ -47,7 +29,7 @@ export type ModalParams = {
   closable?: boolean;
   modalTitle?: string
   dialogStyle?: CssProps;
-  closeCallback?: () => boolean;
+  closeCallback?: () => void;
 }
 export type InputModalParams = Partial<ModalParams>;
 
@@ -74,7 +56,7 @@ export class ModalContainer implements ModalContainerType {
 
   title?: HTMLElement;
 
-  closeIcon!: HTMLButtonElement;
+  closeIcon?: HTMLButtonElement;
 
   body!: HTMLElement;
 
@@ -82,14 +64,13 @@ export class ModalContainer implements ModalContainerType {
     const params: ModalParams = {
       id: 'confirm-modal',
       closable: false,
-      closeCallback: () => true,
       ...inputParams,
     };
 
     this.buildModalContainer(params);
   }
 
-  buildModalContainer(params: ModalParams): void {
+  protected buildModalContainer(params: ModalParams): void {
     // Main modal element
     this.container = document.createElement('div');
     this.container.classList.add('modal', 'fade');
@@ -184,8 +165,9 @@ export class Modal implements ModalType {
     this.$modal.modal({
       backdrop: closable ? true : 'static',
       keyboard: closable !== undefined ? closable : true,
-      show: false,
     });
+
+    this.$modal.modal('hide');
 
     this.$modal.on('hidden.bs.modal', () => {
       const modal = document.querySelector(`#${id}`);
@@ -202,16 +184,43 @@ export class Modal implements ModalType {
     document.body.appendChild(this.modal.container);
   }
 
-  render(content: string): void {
+  setTitle(modalTitle: string): this {
+    if (!this.modal.title) {
+      this.modal.title = document.createElement('h4');
+      this.modal.title.classList.add('modal-title');
+      if (this.modal.closeIcon) {
+        this.modal.header.insertBefore(this.modal.title, this.modal.closeIcon);
+      } else {
+        this.modal.header.appendChild(this.modal.title);
+      }
+    }
+
+    this.modal.title.innerHTML = modalTitle;
+
+    return this;
+  }
+
+  render(content: string): this {
     this.modal.message.innerHTML = content;
+
+    return this;
   }
 
-  show(): void {
+  show(): this {
     this.$modal.modal('show');
+
+    return this;
   }
 
-  hide(): void {
+  hide(): this {
     this.$modal.modal('hide');
+    // Sometimes modal animation is still in progress and hiding fails, so we attach event listener for that case.
+    this.$modal.on('shown.bs.modal', () => {
+      this.$modal.modal('hide');
+      this.$modal.off('shown.bs.modal');
+    });
+
+    return this;
   }
 }
 

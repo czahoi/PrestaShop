@@ -1,28 +1,10 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
+
+use PrestaShop\PrestaShop\Core\Util\DateTime\DateTime as DateTimeUtil;
 
 /**
  * @property SpecificPriceRule $object
@@ -30,6 +12,11 @@
 class AdminSpecificPriceRuleControllerCore extends AdminController
 {
     public $list_reduction_type;
+
+    /**
+     * @var int
+     */
+    public $id_shop;
 
     public function __construct()
     {
@@ -41,7 +28,7 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
 
         parent::__construct();
 
-        /* if $_GET['id_shop'] is transmitted, virtual url can be loaded in config.php, so we wether transmit shop_id in herfs */
+        /* if $_GET['id_shop'] is transmitted, virtual url can be loaded in config.php, so we wether transmit shop_id in hrefs */
         if ($this->id_shop = (int) Tools::getValue('shop_id')) {
             $_GET['id_shop'] = $this->id_shop;
             $_POST['id_shop'] = $this->id_shop;
@@ -80,10 +67,6 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
                 'title' => $this->trans('Name', [], 'Admin.Global'),
                 'filter_key' => 'a!name',
                 'width' => 'auto',
-            ],
-            'shop_name' => [
-                'title' => $this->trans('Shop', [], 'Admin.Global'),
-                'filter_key' => 's!name',
             ],
             'id_currency' => [
                 'title' => $this->trans('Currency', [], 'Admin.Global'),
@@ -133,6 +116,18 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
                 'order_key' => 'a!to',
             ],
         ];
+
+        if (Shop::isFeatureActive()) {
+            $this->fields_list = Tools::arrayInsertElementAfterKey(
+                $this->fields_list,
+                'name',
+                'shop_name',
+                [
+                    'title' => $this->trans('Store', [], 'Admin.Global'),
+                    'filter_key' => 's!name',
+                ]
+            );
+        }
     }
 
     public function initPageHeaderToolbar()
@@ -191,7 +186,7 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
                 ],
                 [
                     'type' => 'select',
-                    'label' => $this->trans('Shop', [], 'Admin.Global'),
+                    'label' => $this->trans('Store', [], 'Admin.Global'),
                     'name' => 'shop_id',
                     'options' => [
                         'query' => Shop::getShops(),
@@ -307,7 +302,9 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
                 'title' => $this->trans('Save', [], 'Admin.Actions'),
             ],
         ];
-        if (($value = $this->getFieldValue($this->object, 'price')) != -1) {
+
+        $value = $this->getFieldValue($this->object, 'price');
+        if ($value !== '' && $value != -1) {
             $price = number_format($value, 6);
         } else {
             $price = '';
@@ -316,7 +313,7 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
         $this->fields_value = [
             'price' => $price,
             'from_quantity' => (($value = $this->getFieldValue($this->object, 'from_quantity')) ? $value : 1),
-            'reduction' => number_format((($value = $this->getFieldValue($this->object, 'reduction')) ? $value : 0), 6),
+            'reduction' => number_format(($value = $this->getFieldValue($this->object, 'reduction')) ? $value : 0, 6),
             'leave_bprice_on' => $price ? 0 : 1,
             'shop_id' => (($value = $this->getFieldValue($this->object, 'id_shop')) ? $value : 1),
         ];
@@ -356,8 +353,21 @@ class AdminSpecificPriceRuleControllerCore extends AdminController
     public function processSave()
     {
         $_POST['price'] = Tools::getValue('leave_bprice_on') ? '-1' : Tools::getValue('price');
-        if (Validate::isLoadedObject(($object = parent::processSave()))) {
-            /* @var SpecificPriceRule $object */
+
+        $from = Tools::getValue('from');
+        $to = Tools::getValue('to');
+        if (!DateTimeUtil::isNull($from) && !DateTimeUtil::isNull($to)) {
+            $fromTimestamp = strtotime($from);
+            $toTimestamp = strtotime($to);
+            if (false !== $fromTimestamp && false !== $toTimestamp && $fromTimestamp > $toTimestamp) {
+                // Errors set before saving prevent the object from being saved and keep the submitted values in the form
+                $this->errors[] = $this->trans('The selected date range is not valid.', [], 'Admin.Notifications.Error');
+            }
+        }
+
+        /** @var SpecificPriceRule $object */
+        $object = parent::processSave();
+        if (Validate::isLoadedObject($object)) {
             $object->deleteConditions();
             foreach ($_POST as $key => $values) {
                 if (preg_match('/^condition_group_([0-9]+)$/Ui', $key, $condition_group)) {

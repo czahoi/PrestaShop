@@ -1,29 +1,9 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
-use Symfony\Component\Translation\TranslatorInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * StarterTheme TODO: FIXME:
@@ -39,6 +19,11 @@ class CustomerAddressFormCore extends AbstractForm
     private $language;
 
     protected $template = 'customer/_partials/address-form.tpl';
+
+    /**
+     * @var CustomerAddressFormatter
+     */
+    protected $formatter;
 
     private $address;
 
@@ -72,7 +57,7 @@ class CustomerAddressFormCore extends AbstractForm
         }
 
         if (!$context->customer->isLogged() && !$context->customer->isGuest()) {
-            return Tools::redirect('/index.php?controller=authentication');
+            return Tools::redirect($context->link->getPageLink('authentication'));
         }
 
         if ($this->address->id_customer != $context->customer->id) {
@@ -87,27 +72,59 @@ class CustomerAddressFormCore extends AbstractForm
 
     public function fillWith(array $params = [])
     {
-        // This form is very tricky: fields may change depending on which
-        // country is being submitted!
-        // So we first update the format if a new id_country was set.
-        if (isset($params['id_country'])
-            && $params['id_country'] != $this->formatter->getCountry()->id
-        ) {
-            $this->formatter->setCountry(new Country(
-                $params['id_country'],
-                $this->language->id
-            ));
+        /*
+         * This form is tricky - fields may change depending on which country is being selected.
+         * Country preselection priority order:
+         * 1) Update the format if a new id_country was set.
+         * 2) Detect country from address if set
+         * 3) Use context country - either a default one or the one geolocated.
+         */
+        if (isset($params['id_country'])) {
+            $country = (int) $params['id_country'] !== (int) $this->formatter->getCountry()->id
+                ? new Country($params['id_country'], $this->language->id)
+                : $this->formatter->getCountry()
+            ;
+        } elseif ($this->address) {
+            $country = $this->formatter->getCountry();
+        } else {
+            $country = Context::getContext()->country;
         }
+
+        $this->formatter->setCountry($country);
 
         return parent::fillWith($params);
     }
 
     public function validate()
     {
-        $is_valid = $this->validateFieldsValues();
+        $is_valid = true;
 
-        if (($hookReturn = Hook::exec('actionValidateCustomerAddressForm', ['form' => $this])) !== '') {
-            $is_valid &= (bool) $hookReturn;
+        $postcode = $this->getField('postcode');
+        if ($postcode && $postcode->isRequired()) {
+            $country = $this->formatter->getCountry();
+            if (!$country->checkZipCode($postcode->getValue())) {
+                $postcode->addError($this->translator->trans(
+                    'Invalid postcode - should look like "%zipcode%"',
+                    ['%zipcode%' => $country->zip_code_format],
+                    'Shop.Forms.Errors'
+                ));
+                $is_valid = false;
+            }
+        }
+
+        $stateField = $this->getField('id_state');
+        if ($stateField && $stateField->getValue() && !empty($stateField->getAvailableValues())
+            && !array_key_exists($stateField->getValue(), $stateField->getAvailableValues())) {
+            $stateField->addError($this->translator->trans(
+                'This state is not valid for the selected country.',
+                [],
+                'Shop.Forms.Errors'
+            ));
+            $is_valid = false;
+        }
+
+        if ($is_valid && Hook::exec('actionValidateCustomerAddressForm', ['form' => $this]) === false) {
+            $is_valid = false;
         }
 
         return $is_valid && parent::validate();
@@ -125,7 +142,9 @@ class CustomerAddressFormCore extends AbstractForm
         );
 
         foreach ($this->formFields as $formField) {
-            $address->{$formField->getName()} = $formField->getValue();
+            if (property_exists($address, $formField->getName())) {
+                $address->{$formField->getName()} = $formField->getValue();
+            }
         }
 
         if (!isset($this->formFields['id_state'])) {
@@ -140,16 +159,10 @@ class CustomerAddressFormCore extends AbstractForm
 
         $this->setAddress($address);
 
-        try {
-            return $this->getPersister()->save(
-                $address,
-                $this->getValue('token')
-            );
-        } catch (PrestaShopException $e) {
-            $this->errors[''][] = $this->translator->trans('Could not update your information, please check your data.', [], 'Shop.Notifications.Error');
-        }
-
-        return false;
+        return $this->getPersister()->save(
+            $address,
+            $this->getValue('token')
+        );
     }
 
     /**
@@ -208,83 +221,5 @@ class CustomerAddressFormCore extends AbstractForm
             'errors' => $this->getErrors(),
             'formFields' => $formFields,
         ];
-    }
-
-    /**
-     * Performs validation on field values.
-     * Returns true if all field values are correct, false otherwise.
-     *
-     * @return bool
-     */
-    private function validateFieldsValues(): bool
-    {
-        $isValid = true;
-
-        $isValid &= $this->validatePostcode();
-        $isValid &= $this->validateField('firstname', 'isName', $this->translator->trans(
-            'Invalid name',
-            [],
-            'Shop.Forms.Errors'
-        ));
-        $isValid &= $this->validateField('lastname', 'isName', $this->translator->trans(
-            'Invalid name',
-            [],
-            'Shop.Forms.Errors'
-        ));
-        $isValid &= $this->validateField('city', 'isCityName', $this->translator->trans(
-            'Invalid format.',
-            [],
-            'Shop.Forms.Errors'
-        ));
-
-        return (bool) $isValid;
-    }
-
-    /**
-     * @return bool
-     */
-    private function validatePostcode(): bool
-    {
-        $postcode = $this->getField('postcode');
-        if ($postcode && $postcode->isRequired()) {
-            $country = $this->formatter->getCountry();
-            if (!$country->checkZipCode($postcode->getValue())) {
-                $postcode->addError($this->translator->trans(
-                    'Invalid postcode - should look like "%zipcode%"',
-                    ['%zipcode%' => $country->zip_code_format],
-                    'Shop.Forms.Errors'
-                ));
-
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @param string $fieldName
-     * @param string $validationFunction
-     * @param string $validationFailMessage
-     *
-     * @return bool
-     */
-    private function validateField(string $fieldName, string $validationFunction, string $validationFailMessage): bool
-    {
-        $field = $this->getField($fieldName);
-        if (null === $field) {
-            return true;
-        }
-        $value = $field->getValue();
-        if ($field->isRequired() && empty($value)) {
-            return false;
-        }
-        if (!empty($value) && false === (bool) Validate::$validationFunction($value)) {
-            $field->addError($validationFailMessage);
-
-            return false;
-        }
-
-        return true;
     }
 }

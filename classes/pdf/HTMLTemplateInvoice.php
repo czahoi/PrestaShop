@@ -1,32 +1,13 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
-/**
- * @since 1.5
- */
+use PrestaShop\PrestaShop\Adapter\ContainerFinder;
+use PrestaShop\PrestaShop\Core\Util\Sorter;
+use PrestaShopBundle\Entity\Repository\ShipmentRepository;
+
 class HTMLTemplateInvoiceCore extends HTMLTemplate
 {
     /**
@@ -45,6 +26,11 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
     public $available_in_your_account = false;
 
     /**
+     * @var ShipmentRepository
+     */
+    private $shipmentRepository;
+
+    /**
      * @param OrderInvoice $order_invoice
      * @param Smarty $smarty
      * @param bool $bulk_mode
@@ -58,10 +44,13 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
         $this->smarty = $smarty;
         $this->smarty->assign('isTaxEnabled', (bool) Configuration::get('PS_TAX'));
 
+        $containerFinder = new ContainerFinder(Context::getContext());
+        $this->shipmentRepository = $containerFinder->getContainer()->get(ShipmentRepository::class);
+
         // If shop_address is null, then update it with current one.
         // But no DB save required here to avoid massive updates for bulk PDF generation case.
         // (DB: bug fixed in 1.6.1.1 with upgrade SQL script to avoid null shop_address in old orderInvoices)
-        if (!isset($this->order_invoice->shop_address) || !$this->order_invoice->shop_address) {
+        if (empty($this->order_invoice->shop_address)) {
             $this->order_invoice->shop_address = OrderInvoice::getCurrentFormattedShopAddress((int) $this->order->id_shop);
             if (!$bulk_mode) {
                 OrderInvoice::fixAllShopAddresses();
@@ -166,7 +155,7 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
 
         $delivery_address = null;
         $formatted_delivery_address = '';
-        if (isset($this->order->id_address_delivery) && $this->order->id_address_delivery) {
+        if (!empty($this->order->id_address_delivery)) {
             $delivery_address = new Address((int) $this->order->id_address_delivery);
             $formatted_delivery_address = AddressFormat::generateAddress($delivery_address, $deliveryAddressPatternRules, '<br />', ' ');
         }
@@ -219,7 +208,7 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
             foreach ($order_details as &$order_detail) {
                 if ($order_detail['image'] != null) {
                     $name = 'product_mini_' . (int) $order_detail['product_id'] . (isset($order_detail['product_attribute_id']) ? '_' . (int) $order_detail['product_attribute_id'] : '') . '.jpg';
-                    $path = _PS_PROD_IMG_DIR_ . $order_detail['image']->getExistingImgPath() . '.jpg';
+                    $path = _PS_PRODUCT_IMG_DIR_ . $order_detail['image']->getExistingImgPath() . '.jpg';
 
                     $order_detail['image_tag'] = preg_replace(
                         '/\.*' . preg_quote(__PS_BASE_URI__, '/') . '/',
@@ -238,7 +227,16 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
             unset($order_detail); // don't overwrite the last order_detail later
         }
 
-        $cart_rules = $this->order->getCartRules($this->order_invoice->id);
+        // Sort products by Reference ID (and if equals (like combination) by Supplier Reference)
+        $sorter = new Sorter();
+        $order_details = $sorter->natural($order_details, Sorter::ORDER_DESC, 'product_reference', 'product_supplier_reference');
+
+        $shipmentCarrierNames = $this->getCarrierNamesFromShipments($this->order->id);
+        if (!empty($shipmentCarrierNames)) {
+            $carrier->name = $shipmentCarrierNames;
+        }
+
+        $cart_rules = $this->order->getCartRules();
         $free_shipping = false;
         foreach ($cart_rules as $key => $cart_rule) {
             if ($cart_rule['free_shipping']) {
@@ -307,10 +305,9 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
             $footer[$key] = Tools::ps_round($value, Context::getContext()->getComputingPrecision(), $this->order->round_mode);
         }
 
-        /**
+        /*
          * Need the $round_mode for the tests.
          */
-        $round_type = null;
         switch ($this->order->round_type) {
             case Order::ROUND_TOTAL:
                 $round_type = 'total';
@@ -360,10 +357,6 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
             'legal_free_text' => $legal_free_text,
         ];
 
-        if (Tools::getValue('debug')) {
-            die(json_encode($data));
-        }
-
         $this->smarty->assign($data);
 
         $tpls = [
@@ -385,17 +378,14 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
     /**
      * Returns the tax tab content.
      *
-     * @return string|array Tax tab html content (Returns an array if debug params used in request)
+     * @return string|array Tax tab html content
      */
     public function getTaxTabContent()
     {
-        $debug = Tools::getValue('debug');
-
         $address = new Address((int) $this->order->{Configuration::get('PS_TAX_ADDRESS_TYPE')});
         $tax_exempt = Configuration::get('VATNUMBER_MANAGEMENT')
-                            && !empty($address->vat_number)
-                            && $address->id_country != Configuration::get('VATNUMBER_COUNTRY');
-        $carrier = new Carrier($this->order->id_carrier);
+            && !empty($address->vat_number)
+            && $address->id_country != Configuration::get('VATNUMBER_COUNTRY');
 
         $data = [
             'tax_exempt' => $tax_exempt,
@@ -406,14 +396,9 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
             'ecotax_tax_breakdown' => $this->order_invoice->getEcoTaxTaxesBreakdown(),
             'wrapping_tax_breakdown' => $this->order_invoice->getWrappingTaxesBreakdown(),
             'tax_breakdowns' => $this->getTaxBreakdown(),
-            'order' => $debug ? null : $this->order,
-            'order_invoice' => $debug ? null : $this->order_invoice,
-            'carrier' => $debug ? null : $carrier,
+            'order' => $this->order,
+            'order_invoice' => $this->order_invoice,
         ];
-
-        if ($debug) {
-            return $data;
-        }
 
         $this->smarty->assign($data);
 
@@ -501,17 +486,37 @@ class HTMLTemplateInvoiceCore extends HTMLTemplate
     {
         $id_lang = Context::getContext()->language->id;
         $id_shop = (int) $this->order->id_shop;
-        $format = '%1$s%2$06d';
 
-        if (Configuration::get('PS_INVOICE_USE_YEAR')) {
-            $format = Configuration::get('PS_INVOICE_YEAR_POS') ? '%1$s%3$s-%2$06d' : '%1$s%2$06d-%3$s';
+        $invoiceNumber = $this->order_invoice->getInvoiceNumberFormatted($id_lang, $id_shop);
+        $safeNumber = str_replace(['/', '\\'], '-', $invoiceNumber);
+
+        return sprintf('%s.pdf', $safeNumber);
+    }
+
+    /**
+     * Get all carrier names from shipments for an order, joined by ", ".
+     * Falls back to an empty string if no shipments exist or on error.
+     */
+    private function getCarrierNamesFromShipments(int $orderId): string
+    {
+        try {
+            $shipments = $this->shipmentRepository->findByOrderId($orderId);
+        } catch (Throwable $e) {
+            return '';
         }
 
-        return sprintf(
-            $format,
-            Configuration::get('PS_INVOICE_PREFIX', $id_lang, null, $id_shop),
-            $this->order_invoice->number,
-            date('Y', strtotime($this->order_invoice->date_add))
-        ) . '.pdf';
+        if (empty($shipments)) {
+            return '';
+        }
+
+        $carrierNames = [];
+        foreach ($shipments as $shipment) {
+            $carrier = new Carrier($shipment->getCarrierId());
+            if ($carrier->name && !in_array($carrier->name, $carrierNames)) {
+                $carrierNames[] = $carrier->name;
+            }
+        }
+
+        return implode(', ', $carrierNames);
     }
 }

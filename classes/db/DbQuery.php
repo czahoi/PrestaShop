@@ -1,33 +1,11 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 /**
  * SQL query builder.
- *
- * @since 1.5.0.1
  */
 class DbQueryCore
 {
@@ -53,7 +31,7 @@ class DbQueryCore
      *
      * @param string $type SELECT|DELETE
      *
-     * @return DbQuery
+     * @return $this
      */
     public function type($type)
     {
@@ -71,7 +49,7 @@ class DbQueryCore
      *
      * @param string $fields List of fields to concat to other fields
      *
-     * @return DbQuery
+     * @return $this
      */
     public function select($fields)
     {
@@ -85,10 +63,10 @@ class DbQueryCore
     /**
      * Sets table for FROM clause.
      *
-     * @param string $table Table name
+     * @param string|DbQuery $table Table name
      * @param string|null $alias Table alias
      *
-     * @return DbQuery
+     * @return $this
      */
     public function from($table, $alias = null)
     {
@@ -96,7 +74,7 @@ class DbQueryCore
             if ($table instanceof DbQuery) {
                 $query = '(' . $table->build() . ')';
             } else {
-                $query = '`' . _DB_PREFIX_ . $table . '`';
+                $query = '`' . bqSQL(_DB_PREFIX_ . $table) . '`';
             }
 
             $this->query['from'][] = $query . ($alias ? ' ' . $alias : '');
@@ -111,7 +89,7 @@ class DbQueryCore
      *
      * @param string $join Complete string
      *
-     * @return DbQuery
+     * @return $this
      */
     public function join($join)
     {
@@ -129,7 +107,7 @@ class DbQueryCore
      * @param string|null $alias Table alias
      * @param string|null $on ON clause
      *
-     * @return DbQuery
+     * @return $this
      */
     public function leftJoin($table, $alias = null, $on = null)
     {
@@ -144,7 +122,7 @@ class DbQueryCore
      * @param string|null $alias Table alias
      * @param string|null $on ON clause
      *
-     * @return DbQuery
+     * @return $this
      */
     public function innerJoin($table, $alias = null, $on = null)
     {
@@ -158,7 +136,7 @@ class DbQueryCore
      * @param string|null $alias Table alias
      * @param string|null $on ON clause
      *
-     * @return DbQuery
+     * @return $this
      */
     public function leftOuterJoin($table, $alias = null, $on = null)
     {
@@ -171,7 +149,7 @@ class DbQueryCore
      * @param string $table Table name (without prefix)
      * @param string|null $alias Table alias
      *
-     * @return DbQuery
+     * @return $this
      */
     public function naturalJoin($table, $alias = null)
     {
@@ -185,7 +163,7 @@ class DbQueryCore
      * @param string|null $alias Table alias
      * @param string|null $on ON clause
      *
-     * @return DbQuery
+     * @return $this
      */
     public function rightJoin($table, $alias = null, $on = null)
     {
@@ -197,7 +175,7 @@ class DbQueryCore
      *
      * @param string $restriction
      *
-     * @return DbQuery
+     * @return $this
      */
     public function where($restriction)
     {
@@ -213,7 +191,7 @@ class DbQueryCore
      *
      * @param string $restriction
      *
-     * @return DbQuery
+     * @return $this
      */
     public function having($restriction)
     {
@@ -229,7 +207,7 @@ class DbQueryCore
      *
      * @param string $fields List of fields to sort. E.g. $this->order('myField, b.mySecondField DESC')
      *
-     * @return DbQuery
+     * @return $this
      */
     public function orderBy($fields)
     {
@@ -245,7 +223,7 @@ class DbQueryCore
      *
      * @param string $fields List of fields to group. E.g. $this->group('myField1, myField2')
      *
-     * @return DbQuery
+     * @return $this
      */
     public function groupBy($fields)
     {
@@ -262,7 +240,7 @@ class DbQueryCore
      * @param int $limit
      * @param int $offset
      *
-     * @return DbQuery
+     * @return $this
      */
     public function limit($limit, $offset = 0)
     {
@@ -289,7 +267,7 @@ class DbQueryCore
     public function build()
     {
         if ($this->query['type'] == 'SELECT') {
-            $sql = 'SELECT ' . ((($this->query['select'])) ? implode(",\n", $this->query['select']) : '*') . "\n";
+            $sql = 'SELECT ' . (($this->query['select']) ? implode(",\n", $this->query['select']) : '*') . "\n";
         } else {
             $sql = $this->query['type'] . ' ';
         }

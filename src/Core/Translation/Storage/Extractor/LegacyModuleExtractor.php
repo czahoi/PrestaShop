@@ -1,35 +1,17 @@
 <?php
-
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace PrestaShop\PrestaShop\Core\Translation\Storage\Extractor;
 
+use PrestaShop\TranslationToolsBundle\Translation\Extractor\PhpExtractor;
+use PrestaShop\TranslationToolsBundle\Translation\Extractor\SmartyExtractor;
+use PrestaShop\TranslationToolsBundle\Translation\Extractor\TwigExtractor;
 use PrestaShop\TranslationToolsBundle\Translation\Helper\DomainHelper;
-use Symfony\Component\Translation\Extractor\ExtractorInterface;
 use Symfony\Component\Translation\MessageCatalogue;
 
 /**
@@ -39,17 +21,17 @@ use Symfony\Component\Translation\MessageCatalogue;
 final class LegacyModuleExtractor implements LegacyModuleExtractorInterface
 {
     /**
-     * @var ExtractorInterface the PHP Code extractor
+     * @var PhpExtractor the PHP Code extractor
      */
     private $phpExtractor;
 
     /**
-     * @var ExtractorInterface the Smarty Code extractor
+     * @var SmartyExtractor the Smarty Code extractor
      */
     private $smartyExtractor;
 
     /**
-     * @var ExtractorInterface the Twig Code extractor
+     * @var TwigExtractor the Twig Code extractor
      */
     private $twigExtractor;
 
@@ -59,21 +41,29 @@ final class LegacyModuleExtractor implements LegacyModuleExtractorInterface
     private $modulesDirectory;
 
     /**
-     * @param ExtractorInterface $phpExtractor
-     * @param ExtractorInterface $smartyExtractor
-     * @param ExtractorInterface $twigExtractor
+     * @var array
+     */
+    private $catalogueExtractExcludedDirectories;
+
+    /**
+     * @param PhpExtractor $phpExtractor
+     * @param SmartyExtractor $smartyExtractor
+     * @param TwigExtractor $twigExtractor
      * @param string $modulesDirectory
+     * @param array $catalogueExtractExcludedDirectories
      */
     public function __construct(
-        ExtractorInterface $phpExtractor,
-        ExtractorInterface $smartyExtractor,
-        ExtractorInterface $twigExtractor,
-        string $modulesDirectory
+        PhpExtractor $phpExtractor,
+        SmartyExtractor $smartyExtractor,
+        TwigExtractor $twigExtractor,
+        string $modulesDirectory,
+        array $catalogueExtractExcludedDirectories
     ) {
         $this->phpExtractor = $phpExtractor;
         $this->smartyExtractor = $smartyExtractor;
         $this->twigExtractor = $twigExtractor;
         $this->modulesDirectory = $modulesDirectory;
+        $this->catalogueExtractExcludedDirectories = $catalogueExtractExcludedDirectories;
     }
 
     /**
@@ -85,11 +75,17 @@ final class LegacyModuleExtractor implements LegacyModuleExtractorInterface
     {
         $extractedCatalogue = new MessageCatalogue($locale);
 
-        $this->phpExtractor->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
+        $this->phpExtractor
+            ->setExcludedDirectories($this->catalogueExtractExcludedDirectories)
+            ->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
         $extractedCatalogue = $this->postprocessPhpCatalogue($extractedCatalogue, $moduleName);
 
-        $this->smartyExtractor->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
-        $this->twigExtractor->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
+        $this->smartyExtractor
+            ->setExcludedDirectories($this->catalogueExtractExcludedDirectories)
+            ->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
+        $this->twigExtractor
+            ->setExcludedDirectories($this->catalogueExtractExcludedDirectories)
+            ->extract($this->modulesDirectory . '/' . $moduleName, $extractedCatalogue);
 
         return $extractedCatalogue;
     }

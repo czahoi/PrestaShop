@@ -1,0 +1,439 @@
+<?php
+
+/**
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Core\ExtraProperty\Validation;
+
+use DateTimeImmutable;
+use PHPUnit\Framework\TestCase;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyDefinition;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyDefinitionCollection;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyScope;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyType;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Validation\ExtraPropertyValidator;
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Validation;
+
+/**
+ * Unit tests for the constraint-based ExtraPropertyValidator.
+ *
+ * Uses a standalone Symfony validator (Validation::createValidator()) with plain, dependency-free constraints
+ * (Length, Regex, NotBlank): container-backed constraints such as TypedRegex are exercised by the integration
+ * tests instead. The focus here is the facade behaviour — constraint resolution, scope walking and property-path
+ * re-basing — not the individual constraint rules.
+ */
+class ExtraPropertyValidatorTest extends TestCase
+{
+    private function validator(): ExtraPropertyValidator
+    {
+        return new ExtraPropertyValidator(Validation::createValidator());
+    }
+
+    /**
+     * @param list<\Symfony\Component\Validator\Constraint> $constraints
+     */
+    private function definition(ExtraPropertyScope $scope, array $constraints): ExtraPropertyDefinition
+    {
+        return new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'video_link',
+            type: ExtraPropertyType::STRING,
+            scope: $scope,
+            moduleName: 'demoextrafield',
+            constraints: $constraints,
+        );
+    }
+
+    public function testNoConstraintsYieldsNoViolations(): void
+    {
+        $violations = $this->validator()->validateValue($this->definition(ExtraPropertyScope::COMMON, []), 'anything');
+
+        $this->assertCount(0, $violations);
+    }
+
+    public function testValidScalarValueYieldsNoViolations(): void
+    {
+        $definition = $this->definition(ExtraPropertyScope::COMMON, [new Assert\Length(['max' => 10])]);
+
+        $this->assertCount(0, $this->validator()->validateValue($definition, 'short'));
+    }
+
+    public function testFailingScalarKeepsTheConstraintMessage(): void
+    {
+        $definition = $this->definition(ExtraPropertyScope::COMMON, [new Assert\Length(['max' => 3])]);
+
+        $violations = $this->validator()->validateValue($definition, 'toolong');
+
+        $this->assertCount(1, $violations);
+        $this->assertNotEmpty((string) $violations->get(0)->getMessage());
+    }
+
+    public function testMultipleFailingConstraintsProduceMultipleViolations(): void
+    {
+        $definition = $this->definition(ExtraPropertyScope::COMMON, [
+            new Assert\Length(['min' => 5]),
+            new Assert\Regex(['pattern' => '/^\d+$/']),
+        ]);
+
+        // "ab" is both too short (< 5) and not all-digits → one violation per failing constraint.
+        $this->assertCount(2, $this->validator()->validateValue($definition, 'ab'));
+    }
+
+    public function testBatchValidationPrefixesPathWithModuleAndProperty(): void
+    {
+        $definition = $this->definition(ExtraPropertyScope::COMMON, [new Assert\Length(['max' => 3])]);
+        $collection = new ExtraPropertyDefinitionCollection([$definition]);
+
+        $violations = $this->validator()->validate(
+            ['demoextrafield' => ['video_link' => 'toolong']],
+            $collection
+        );
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('demoextrafield.video_link', $violations->get(0)->getPropertyPath());
+    }
+
+    public function testPerLanguageConstraintWithAllTagsTheOffendingLanguage(): void
+    {
+        // Per-language validation is expressed with Symfony's Assert\All (the value is the whole [id_lang=>value]
+        // array). All tags each failing element with a "[<key>]" path → re-based to "<module>.<property>[<key>]".
+        $definition = $this->definition(ExtraPropertyScope::LANG, [new Assert\All([new Assert\Length(['max' => 3])])]);
+        $collection = new ExtraPropertyDefinitionCollection([$definition]);
+
+        // id_lang 1 is valid ("ok"); id_lang 2 is too long → only the latter must produce a violation, path-tagged.
+        $violations = $this->validator()->validate(
+            ['demoextrafield' => ['video_link' => [1 => 'ok', 2 => 'toolong']]],
+            $collection
+        );
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('demoextrafield.video_link[2]', $violations->get(0)->getPropertyPath());
+    }
+
+    public function testWholeArrayConstraintValidatesTheArrayItself(): void
+    {
+        // A bare (non-All) constraint validates the whole array — the mechanism that lets DefaultLanguage work on a
+        // localized field. Assert\Count is used here as a dependency-free stand-in (DefaultLanguage's validator needs
+        // the container). The violation lands on the field itself, not a language key.
+        $definition = $this->definition(ExtraPropertyScope::LANG, [new Assert\Count(['min' => 2])]);
+        $collection = new ExtraPropertyDefinitionCollection([$definition]);
+
+        $violations = $this->validator()->validate(
+            ['demoextrafield' => ['video_link' => [1 => 'only-one-language']]],
+            $collection
+        );
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('demoextrafield.video_link', $violations->get(0)->getPropertyPath());
+    }
+
+    public function testObjectModelLangIdScalarValidatesUnwrappedAllAndSkipsWholeArrayConstraints(): void
+    {
+        // An ObjectModel loaded WITH a langId exposes a LANG value as a single SCALAR, not the [id_lang=>value] array.
+        // The per-language rules (unwrapped from Assert\All) must apply to the scalar; whole-array constraints must be
+        // skipped (Assert\Count stands in for DefaultLanguage here — it would otherwise hard-error on a scalar value).
+        $definition = $this->definition(ExtraPropertyScope::LANG, [
+            new Assert\All([new Assert\Length(['max' => 3])]),
+            new Assert\Count(['min' => 2]),
+        ]);
+
+        // Invalid per-language scalar → exactly one violation, from the unwrapped Length (Count is skipped, no error).
+        $this->assertCount(1, $this->validator()->validateValue($definition, 'toolong'));
+        // Valid per-language scalar → no violation.
+        $this->assertCount(0, $this->validator()->validateValue($definition, 'ok'));
+    }
+
+    public function testDefinitionAbsentFromPayloadIsSkipped(): void
+    {
+        $definition = $this->definition(ExtraPropertyScope::COMMON, [new Assert\NotBlank()]);
+        $collection = new ExtraPropertyDefinitionCollection([$definition]);
+
+        // The property is not in the payload at all → it must not be validated (no spurious NotBlank violation).
+        $this->assertCount(0, $this->validator()->validate(['demoextrafield' => []], $collection));
+    }
+
+    /**
+     * The single rule-set shared with the registry's default-value check: what cannot be a
+     * default cannot be a stored value either. Null and '' always pass ("no value" is the
+     * column's or a declared constraint's concern); runtime-only shapes (DateTimeInterface,
+     * decoded JSON structures) are accepted on top of the scalar spellings.
+     *
+     * @dataProvider valueCompatibilityProvider
+     */
+    public function testIsValueCompatible(ExtraPropertyType $type, mixed $value, bool $expected, ?array $enumValues = null): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isValueCompatible($type, $value, $enumValues));
+    }
+
+    public static function valueCompatibilityProvider(): iterable
+    {
+        yield 'null always passes' => [ExtraPropertyType::INT, null, true];
+        yield 'empty string always passes' => [ExtraPropertyType::DATE, '', true];
+
+        yield 'int native' => [ExtraPropertyType::INT, 42, true];
+        yield 'int string' => [ExtraPropertyType::INT, '-7', true];
+        yield 'int refuses letters' => [ExtraPropertyType::INT, 'abc', false];
+        yield 'int refuses float string' => [ExtraPropertyType::INT, '1.5', false];
+        yield 'int refuses trailing newline' => [ExtraPropertyType::INT, "1\n", false];
+
+        yield 'float native' => [ExtraPropertyType::FLOAT, 1.5, true];
+        yield 'float numeric string' => [ExtraPropertyType::FLOAT, '1.5', true];
+        yield 'float refuses letters' => [ExtraPropertyType::FLOAT, 'abc', false];
+
+        yield 'bool native' => [ExtraPropertyType::BOOL, false, true];
+        yield 'bool 0/1 spellings' => [ExtraPropertyType::BOOL, '1', true];
+        yield 'bool refuses other ints' => [ExtraPropertyType::BOOL, 2, false];
+
+        yield 'date literal date' => [ExtraPropertyType::DATE, '2026-12-24', true];
+        yield 'date literal datetime' => [ExtraPropertyType::DATE, '2026-12-24 10:30:00', true];
+        yield 'date DateTimeInterface' => [ExtraPropertyType::DATE, new DateTimeImmutable(), true];
+        yield 'date refuses relative wording' => [ExtraPropertyType::DATE, 'tomorrow', false];
+        yield 'date refuses rolled-over date' => [ExtraPropertyType::DATE, '2026-02-31', false];
+        yield 'date refuses garbage' => [ExtraPropertyType::DATE, 'not-a-date', false];
+
+        yield 'choice member' => [ExtraPropertyType::CHOICE, 'a', true, ['a', 'b']];
+        yield 'choice refuses outsider' => [ExtraPropertyType::CHOICE, 'z', false, ['a', 'b']];
+        yield 'choice without enum passes' => [ExtraPropertyType::CHOICE, 'anything', true];
+
+        yield 'json encoded string' => [ExtraPropertyType::JSON, '{"a":1}', true];
+        yield 'json decoded structure' => [ExtraPropertyType::JSON, ['a' => 1], true];
+        yield 'json refuses invalid string' => [ExtraPropertyType::JSON, '{invalid', false];
+
+        yield 'string accepts anything scalar' => [ExtraPropertyType::STRING, 'free text', true];
+    }
+
+    /**
+     * The type rules apply implicitly on every write, even with ZERO declared constraints —
+     * previously 'abc' on an INT was silently stored as 0 and 'tomorrow' on a DATE was
+     * interpreted. The LANG/SHOP array shape is checked leaf by leaf with the offending
+     * key in the violation path.
+     */
+    public function testImplicitTypeValidationRunsWithoutDeclaredConstraints(): void
+    {
+        $intDefinition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'stock_alert',
+            type: ExtraPropertyType::INT,
+            scope: ExtraPropertyScope::COMMON,
+            moduleName: 'demoextrafield',
+        );
+
+        $violations = $this->validator()->validateValue($intDefinition, 'abc');
+        $this->assertCount(1, $violations);
+        $this->assertStringContainsString('"int" field type', $violations->get(0)->getMessage());
+        $this->assertCount(0, $this->validator()->validateValue($intDefinition, '42'));
+
+        $langDateDefinition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'seen_at',
+            type: ExtraPropertyType::DATE,
+            scope: ExtraPropertyScope::LANG,
+            moduleName: 'demoextrafield',
+        );
+
+        $violations = $this->validator()->validateValue($langDateDefinition, ['en-US' => '2026-12-24', 'fr-FR' => 'tomorrow']);
+        $this->assertCount(1, $violations);
+        $this->assertSame('[fr-FR]', $violations->get(0)->getPropertyPath());
+    }
+
+    /**
+     * Declared constraints keep message priority: when a module declares Assert\Type('bool')
+     * and the value fails both it and the implicit type rule, the module's constraint
+     * message is reported — the implicit check is a safety net, not a replacement.
+     */
+    public function testDeclaredConstraintMessageWinsOverTheImplicitTypeCheck(): void
+    {
+        $definition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'api_flag',
+            type: ExtraPropertyType::BOOL,
+            scope: ExtraPropertyScope::COMMON,
+            moduleName: 'demoextrafield',
+            constraints: [new Assert\Type('bool')],
+        );
+
+        $violations = $this->validator()->validateValue($definition, 'not-a-bool');
+
+        $this->assertCount(1, $violations);
+        $this->assertStringNotContainsString('field type', $violations->get(0)->getMessage());
+    }
+
+    /**
+     * @dataProvider tableOrIdentifierProvider
+     */
+    public function testIsTableOrIdentifier(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isTableOrIdentifier($value));
+    }
+
+    public static function tableOrIdentifierProvider(): iterable
+    {
+        yield 'lowercase' => ['product', true];
+        yield 'snake case' => ['product_attribute', true];
+        yield 'mixed case and digits' => ['Mod2_Field', true];
+        // MySQL accepts a leading digit in an identifier as long as it is not all digits.
+        yield 'leading digit' => ['1field', true];
+        yield 'hyphen' => ['my-field', true];
+        yield 'single char' => ['a', true];
+        yield '64 chars (MySQL limit)' => [str_repeat('a', 64), true];
+        yield '65 chars' => [str_repeat('a', 65), false];
+        yield 'empty' => ['', false];
+        yield 'space' => ['my field', false];
+        yield 'dot (qualified name)' => ['ps_product.id', false];
+        yield 'backtick' => ['field`', false];
+        yield 'backtick breakout' => ['a` INT; DROP TABLE ps_product; --', false];
+        yield 'single quote' => ["a'b", false];
+        yield 'double quote' => ['a"b', false];
+        yield 'semicolon' => ['a;b', false];
+        yield 'double hyphen' => ['a--', true];
+        yield 'hash comment' => ['a#b', false];
+        yield 'parenthesis' => ['a()', false];
+        yield 'slash' => ['a/b', false];
+        yield 'backslash' => ['a\\b', false];
+        yield 'null byte' => ["a\0b", false];
+        yield 'inner newline' => ["a\nb", false];
+        yield 'trailing newline' => ["product\n", false];
+        yield 'unicode letter' => ['produit_é', false];
+        yield 'fullwidth letter' => ['ａbc', false];
+    }
+
+    /**
+     * @dataProvider moduleNameProvider
+     */
+    public function testIsModuleName(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isModuleName($value));
+    }
+
+    public static function moduleNameProvider(): iterable
+    {
+        yield 'lowercase' => ['demoextrafield', true];
+        yield 'underscore' => ['ps_apiresources', true];
+        yield 'hyphen' => ['my-module', true];
+        yield 'mixed case' => ['MyModule', true];
+        yield 'leading digit' => ['1module', true];
+        // No length cap here: the 64-char storage column check of the definition bounds it.
+        yield 'long' => [str_repeat('a', 100), true];
+        yield 'empty' => ['', false];
+        yield 'space' => ['my module', false];
+        yield 'dot' => ['my.module', false];
+        yield 'path traversal' => ['../ps_mbo', false];
+        yield 'slash' => ['vendor/module', false];
+        yield 'backtick' => ['mod`ule', false];
+        yield 'single quote' => ["mod'ule", false];
+        yield 'semicolon' => ['mod;ule', false];
+        yield 'null byte' => ["mod\0ule", false];
+        yield 'trailing newline' => ["mymodule\n", false];
+        yield 'unicode' => ['modulé', false];
+        yield 'html' => ['<script>', false];
+    }
+
+    /**
+     * @dataProvider safeDisplayTextProvider
+     */
+    public function testIsSafeDisplayText(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isSafeDisplayText($value));
+    }
+
+    public static function safeDisplayTextProvider(): iterable
+    {
+        yield 'plain' => ['Video link', true];
+        yield 'empty' => ['', true];
+        yield 'unicode' => ['Lien vidéo — 日本語', true];
+        yield 'tab and newline' => ["Line 1\n\tLine 2", true];
+        yield 'greater than' => ['a > b', true];
+        yield 'ampersand entity' => ['Tom &amp; Jerry', true];
+        yield 'quotes' => ['"quoted" \'text\'', true];
+        yield 'placeholder' => ['%count% items', true];
+        // Tags are what is refused: "<" can never open one, whatever the sink.
+        yield 'script tag' => ['<script>alert(1)</script>', false];
+        yield 'img onerror' => ['<img src=x onerror=alert(1)>', false];
+        yield 'less than alone' => ['a < b', false];
+        yield 'closing tag' => ['</label>', false];
+        yield 'html comment' => ['<!-- x -->', false];
+        yield 'null byte' => ["a\0b", false];
+        yield 'bell' => ["a\x07b", false];
+        yield 'vertical tab' => ["a\x0Bb", false];
+        yield 'form feed' => ["a\x0Cb", false];
+        yield 'escape' => ["a\x1Bb", false];
+        yield 'delete' => ["a\x7Fb", false];
+    }
+
+    /**
+     * @dataProvider translationDomainProvider
+     */
+    public function testIsTranslationDomain(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isTranslationDomain($value));
+    }
+
+    public static function translationDomainProvider(): iterable
+    {
+        yield 'two segments' => ['Admin.Actions', true];
+        yield 'three segments' => ['Modules.Demoextrafield.Admin', true];
+        yield 'underscore and digits' => ['Modules.Ps_apiresources2.Admin', true];
+        yield 'single segment' => ['Admin', false];
+        yield 'four segments' => ['Modules.Demo.Admin.Extra', false];
+        yield 'empty' => ['', false];
+        yield 'lowercase segment' => ['Admin.global', false];
+        yield 'leading digit segment' => ['Admin.1Global', false];
+        yield 'empty segment' => ['Admin..Global', false];
+        yield 'trailing dot' => ['Admin.Global.', false];
+        yield 'intl-icu suffix' => ['Admin.Global+intl-icu', false];
+        yield 'space' => ['Admin. Global', false];
+        yield 'path traversal' => ['../Admin.Global', false];
+        yield 'slash' => ['Admin/Global', false];
+        yield 'hyphen' => ['Admin.Global-Extra', false];
+        yield 'unicode' => ['Admin.Glöbal', false];
+        yield 'trailing newline' => ["Admin.Global\n", false];
+    }
+
+    /**
+     * @dataProvider safeUrlProvider
+     */
+    public function testIsSafeUrl(string $value, bool $expected): void
+    {
+        $this->assertSame($expected, ExtraPropertyValidator::isSafeUrl($value));
+    }
+
+    public static function safeUrlProvider(): iterable
+    {
+        yield 'https' => ['https://www.prestashop.com/doc?x=1#y', true];
+        yield 'http' => ['http://example.com', true];
+        yield 'scheme is case insensitive' => ['HTTPS://EXAMPLE.COM', true];
+        yield 'root relative' => ['/admin-dev/index.php?controller=AdminProducts', true];
+        yield 'root' => ['/', true];
+        yield 'root relative with colon' => ['/javascript:alert(1)', true];
+        yield 'scheme without host' => ['https://', false];
+        yield 'javascript' => ['javascript:alert(1)', false];
+        yield 'javascript mixed case' => ['JaVaScRiPt:alert(1)', false];
+        yield 'javascript leading space' => [' javascript:alert(1)', false];
+        yield 'javascript after tab' => ["\tjavascript:alert(1)", false];
+        yield 'data' => ['data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==', false];
+        yield 'vbscript' => ['vbscript:msgbox(1)', false];
+        yield 'file' => ['file:///etc/passwd', false];
+        yield 'ftp' => ['ftp://example.com', false];
+        yield 'mailto' => ['mailto:a@example.com', false];
+        yield 'http without slashes' => ['http:example.com', false];
+        yield 'protocol relative' => ['//evil.example', false];
+        yield 'backslash protocol relative' => ['/\\evil.example', false];
+        yield 'backslash in absolute url' => ['https://good.example\\@evil.example', false];
+        yield 'relative path' => ['relative/path', false];
+        yield 'query only' => ['?q=1', false];
+        yield 'fragment only' => ['#top', false];
+        yield 'empty' => ['', false];
+        yield 'space' => ['https://example.com/a b', false];
+        yield 'newline inside' => ["https://example.com/\nx", false];
+        yield 'trailing newline' => ["https://example.com\n", false];
+        yield 'double quote attribute breakout' => ['https://example.com/" onmouseover="alert(1)', false];
+        yield 'single quote attribute breakout' => ["https://example.com/' onmouseover='alert(1)", false];
+        yield 'tag' => ['https://example.com/<script>', false];
+        yield 'greater than' => ['/a>b', false];
+    }
+}

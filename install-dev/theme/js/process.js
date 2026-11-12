@@ -1,31 +1,11 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 var is_installing = false;
-$(document).ready(function() {
-  $("#loaderSpace").unbind('ajaxStart');
+$(function() {
+  $("#loaderSpace").off('ajaxStart');
   start_install();
 });
 
@@ -68,6 +48,10 @@ function process_install(step) {
     success: function(json) {
       // No error during this step
       if (json && json.success === true) {
+        if (json.warning && json.warning !== '') {
+          install_warning(json.warning);
+        }
+
         $('#process_step_'+step.key).addClass('success');
         current_step++;
         if (current_step >= process_steps.length) {
@@ -125,6 +109,10 @@ function process_install_subtask(step, current_subtask) {
         $('#progress_bar .total .progress').animate({'width': '+='+subtask_process_pixel+'px'}, 500);
         $('#progress_bar .total span').html(Math.ceil((current_step * (100 / process_steps.length)) + Math.ceil(current_subtask * ((100 / process_steps.length) / step.subtasks.length)))+'%');
 
+        if (json.warning && json.warning !== '') {
+          install_warning(json.warning);
+        }
+
         if (current_subtask >= step.subtasks.length) {
           current_step++;
           $('#process_step_'+step.key).show().addClass('success');
@@ -148,6 +136,12 @@ function process_install_subtask(step, current_subtask) {
   });
 }
 
+function install_warning(warning) {
+  console.log('install_warning', warning);
+  $('#warning_process').show();
+  $('#warning_process').append('<p>' + warning + '</p>');
+}
+
 function install_error(step, errors) {
   current_step = 0;
   is_installing = false;
@@ -161,11 +155,25 @@ function install_error(step, errors) {
   if (errors) {
     var list_errors = errors;
 
-    if ($.type(list_errors) == 'string') {
-      list_errors = [];
-      list_errors[0] = errors;
-    } else if ($.type(list_errors) == 'array') {
-      list_errors = [list_errors[0]];
+    switch (typeof list_errors) {
+      case 'string':
+        list_errors = [errors];
+        break;
+
+      case 'array':
+        list_errors = [list_errors[0]];
+        break;
+
+      case 'object':
+        let err = []
+        $.each(list_errors, function(prop, val){
+          if (typeof val === 'array') {
+            val = val.map(function(v){ return "<li>" + v + "</li>"});
+          }
+          err.push(prop + ' <ul>' + val + '</ul>');
+        });
+        list_errors = err;
+        break;
     }
 
     var display = '<ol>';

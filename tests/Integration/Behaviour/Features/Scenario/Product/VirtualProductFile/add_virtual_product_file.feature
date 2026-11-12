@@ -1,5 +1,5 @@
 # ./vendor/bin/behat -c tests/Integration/Behaviour/behat.yml -s product --tags add-virtual-product-file
-@reset-database-before-feature
+@restore-products-before-feature
 @virtual-product-file
 @add-virtual-product-file
 @reset-downloads-after-feature
@@ -20,7 +20,14 @@ Feature: Add virtual product file from BO (Back Office).
       | access days          | 0               |
       | download times limit | 0               |
       | expiration date      |                 |
+    # The same details are readable from the file itself, without loading the product
+    And virtual product file "file1" should belong to product "product1" and have following details:
+      | display name         | puffin-logo.png |
+      | access days          | 0               |
+      | download times limit | 0               |
+      | expiration date      |                 |
     And file "file1" for product "product1" should exist in system
+    And file file1 for product product1 should have same file as app_icon.png
 
   Scenario: I add virtual product file with limited access days, downloads and expiration date
     Given I add product "product2" with following information:
@@ -35,6 +42,11 @@ Feature: Add virtual product file from BO (Back Office).
       | download times limit | 3                   |
       | expiration date      | 2020-11-20 10:00:00 |
     Then product "product2" should have a virtual product file "file2" with following details:
+      | display name         | puffin-logo2.png    |
+      | access days          | 3                   |
+      | download times limit | 3                   |
+      | expiration date      | 2020-11-20 10:00:00 |
+    And virtual product file "file2" should belong to product "product2" and have following details:
       | display name         | puffin-logo2.png    |
       | access days          | 3                   |
       | download times limit | 3                   |
@@ -58,6 +70,7 @@ Feature: Add virtual product file from BO (Back Office).
       | download times limit | 100                 |
       | expiration date      | 2000-01-20 09:01:01 |
     And file "file3" for product "product3" should exist in system
+    And file file3 for product product3 should have same file as dummy_zip.zip
 
   Scenario: I should not be able to add file to a product which is not virtual
     Given I add product product4 with following information:
@@ -85,6 +98,7 @@ Feature: Add virtual product file from BO (Back Office).
       | access days          | 0                                  |
       | download times limit | 0                                  |
       | expiration date      |                                    |
+    And file file5 for product product5 should have same file as dummy_zip.zip
     When I add virtual product file "file5-5" to product "product5" with following details:
       | file name    | app_icon.png     |
       | display name | puffin-logo2.png |
@@ -95,6 +109,8 @@ Feature: Add virtual product file from BO (Back Office).
       | download times limit | 0                                  |
       | expiration date      |                                    |
     And file "file5" for product "product5" should exist in system
+    # Check that the file as not modified
+    And file file5 for product product5 should have same file as dummy_zip.zip
 
   Scenario: I should not be able to add a file with invalid details
     Given I add product product6 with following information:

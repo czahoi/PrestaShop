@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 class SpecificPriceRuleCore extends ObjectModel
 {
@@ -47,7 +27,7 @@ class SpecificPriceRuleCore extends ObjectModel
         'table' => 'specific_price_rule',
         'primary' => 'id_specific_price_rule',
         'fields' => [
-            'name' => ['type' => self::TYPE_STRING, 'validate' => 'isCleanHtml', 'required' => true],
+            'name' => ['type' => self::TYPE_STRING, 'validate' => 'isCleanHtml', 'required' => true, 'size' => 255],
             'id_shop' => ['type' => self::TYPE_INT, 'validate' => 'isUnsignedId', 'required' => true],
             'id_country' => ['type' => self::TYPE_INT, 'validate' => 'isUnsignedId', 'required' => true],
             'id_currency' => ['type' => self::TYPE_INT, 'validate' => 'isUnsignedId', 'required' => true],
@@ -168,9 +148,9 @@ class SpecificPriceRuleCore extends ObjectModel
             return;
         }
 
+        /** @var PrestaShopCollection<SpecificPriceRule> */
         $rules = new PrestaShopCollection('SpecificPriceRule');
         foreach ($rules as $rule) {
-            /* @var SpecificPriceRule $rule */
             $rule->apply($products);
         }
     }
@@ -221,7 +201,7 @@ class SpecificPriceRuleCore extends ObjectModel
         $result = [];
 
         if ($conditions_group) {
-            foreach ($conditions_group as $id_condition_group => $condition_group) {
+            foreach ($conditions_group as $condition_group) {
                 // Base request
                 $query = new DbQuery();
                 $query->select('p.`id_product`')
@@ -275,8 +255,11 @@ class SpecificPriceRuleCore extends ObjectModel
                     $query->select('NULL as `id_product_attribute`');
                 }
 
+                // Merge previous result to current results
                 $result = array_merge($result, Db::getInstance()->executeS($query));
             }
+            // Remove duplicate after the array_merge
+            $result = array_unique($result, SORT_REGULAR);
         } else {
             // All products without conditions
             if ($products && count($products)) {

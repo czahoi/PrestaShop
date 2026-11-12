@@ -1,31 +1,12 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShop\PrestaShop\Core\Util\DateTime;
 
+use DateTime as NativeDateTime;
 use DateTimeImmutable;
 use DateTimeInterface;
 use RuntimeException;
@@ -44,6 +25,11 @@ final class DateTime
      * Default format for date time string
      */
     public const DEFAULT_DATETIME_FORMAT = 'Y-m-d H:i:s';
+
+    /**
+     * ISO Date time format string
+     */
+    public const ISO_DATETIME_FORMAT = 'c';
 
     /**
      * DateTime value which should be considered same as null
@@ -65,7 +51,7 @@ final class DateTime
      */
     public function __construct()
     {
-        throw new RuntimeException(sprintf('This class purpose is to define constants only. You might have mistaken it with "%s"', \DateTime::class));
+        throw new RuntimeException(sprintf('This class purpose is to define constants only. You might have mistaken it with "%s"', NativeDateTime::class));
     }
 
     /**
@@ -79,7 +65,7 @@ final class DateTime
     }
 
     /**
-     * Returns NullDateTime if input value is nullable (including 0000-00-00 value), return a DateTime object otherwise.
+     * Returns NullDateTime if input value is nullable (including 0000-00-00 value), return a DateTimeImmutable object otherwise.
      *
      * @param string|null $value
      *
@@ -88,5 +74,17 @@ final class DateTime
     public static function buildNullableDateTime(?string $value): DateTimeImmutable
     {
         return empty($value) || $value === self::NULL_DATETIME || $value === self::NULL_DATE ? new NullDateTime() : new DateTimeImmutable($value);
+    }
+
+    /**
+     * Returns null if input value is nullable (including 0000-00-00 value), return a DateTimeImmutable object otherwise.
+     *
+     * @param string|null $value
+     *
+     * @return DateTimeImmutable|NullDateTime|null
+     */
+    public static function buildDateTimeOrNull(?string $value): ?DateTimeImmutable
+    {
+        return empty($value) || $value === self::NULL_DATETIME || $value === self::NULL_DATE ? null : new DateTimeImmutable($value);
     }
 }

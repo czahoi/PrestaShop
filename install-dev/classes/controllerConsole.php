@@ -1,31 +1,12 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 use PrestaShopBundle\Install\AbstractInstall;
 use PrestaShopBundle\Install\LanguageList;
+use PrestaShopBundle\Translation\TranslatorComponent;
 
 abstract class InstallControllerConsole
 {
@@ -69,6 +50,16 @@ abstract class InstallControllerConsole
     protected $model_database;
 
     /**
+     * @var Datas|null
+     */
+    public $datas;
+
+    /**
+     * @var TranslatorComponent|null
+     */
+    public $translator;
+
+    /**
      * Validate current step.
      */
     abstract public function validate();
@@ -80,7 +71,18 @@ abstract class InstallControllerConsole
             echo 'Arguments available:' . PHP_EOL;
             foreach ($available_arguments as $key => $arg) {
                 $name = isset($arg['name']) ? $arg['name'] : $key;
-                echo '--' . $name . "\t" . (isset($arg['help']) ? $arg['help'] : '') . (isset($arg['default']) ? "\t" . '(Default: ' . $arg['default'] . ')' : '') . PHP_EOL;
+                $help = isset($arg['help']) ? $arg['help'] : '';
+                $default = '';
+
+                if (isset($arg['default'])) {
+                    if (is_array($arg['default'])) {
+                        $default = '(Default: [' . implode(',', $arg['default']) . '])';
+                    } else {
+                        $default = '(Default: ' . $arg['default'] . ')';
+                    }
+                }
+
+                echo '--' . $name . "\t" . $help . "\t" . $default . PHP_EOL;
             }
             exit;
         }
@@ -126,7 +128,9 @@ abstract class InstallControllerConsole
         $this->language = LanguageList::getInstance();
         Context::getContext()->language = $this->language->getLanguage($this->datas->language);
 
-        $this->translator = Context::getContext()->getTranslator();
+        // Installer translator, not the Symfony one: a settings file left by a previous run may point to an
+        // unreachable database, and building the Symfony translator needs a connection
+        $this->translator = Context::getContext()->getTranslator(true);
 
         if (!$this->datas->language) {
             die('No language defined');
@@ -143,17 +147,14 @@ abstract class InstallControllerConsole
     {
     }
 
-    public function printErrors()
+    public function printErrors($context = null)
     {
         $errors = array_merge(
             $this->model_database->getErrors(),
             $this->model_install->getErrors()
         );
         if (count($errors)) {
-            if (!is_array($errors)) {
-                $errors = [$errors];
-            }
-            echo 'Errors :' . PHP_EOL;
+            echo 'Errors ' . ($context === null ?: $context) . ':' . PHP_EOL;
             foreach ($errors as $error_process) {
                 if (!is_array($error_process)) {
                     $error_process = [$error_process];

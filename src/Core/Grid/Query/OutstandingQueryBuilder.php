@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -88,7 +68,7 @@ final class OutstandingQueryBuilder implements DoctrineQueryBuilderInterface
     {
         $qb = $this->getBaseQueryBuilder($searchCriteria)
             ->addSelect('oi.id_order_invoice AS id_invoice, oi.date_add')
-            ->addSelect('CONCAT(LEFT(c.`firstname`, 1), \'. \' , c.`lastname`) AS customer')
+            ->addSelect($this->getCustomerField(false) . ' AS customer')
             ->addSelect('c.company, rl.name AS risk, r.color')
             ->addSelect('c.outstanding_allow_amount')
             ->addSelect('c.id_customer, o.id_order')
@@ -147,7 +127,6 @@ final class OutstandingQueryBuilder implements DoctrineQueryBuilderInterface
         ];
 
         $likeComparisonFilters = [
-            'customer' => 'CONCAT(LEFT(c.firstname, 1), \'. \' , c.lastname)',
             'company' => 'c.company',
         ];
 
@@ -156,6 +135,15 @@ final class OutstandingQueryBuilder implements DoctrineQueryBuilderInterface
         ];
 
         foreach ($filters as $filterName => $filterValue) {
+            if ('customer' === $filterName) {
+                // The column shows the abbreviated name (J. DOE) and a merchant may copy it from there, or type
+                // the real first name: either form matches.
+                $qb->andWhere(sprintf('(%s LIKE :customer OR %s LIKE :customer)', $this->getCustomerField(), $this->getCustomerField(false)));
+                $qb->setParameter('customer', '%' . $filterValue . '%');
+
+                continue;
+            }
+
             if (isset($strictComparisonFilters[$filterName])) {
                 $alias = $strictComparisonFilters[$filterName];
 
@@ -205,7 +193,7 @@ final class OutstandingQueryBuilder implements DoctrineQueryBuilderInterface
         $sortableFields = [
             'id_invoice' => 'oi.id_order_invoice',
             'date_add' => 'oi.date_add',
-            'customer' => 'CONCAT(LEFT(c.firstname, 1), \'. \' , c.lastname)',
+            'customer' => $this->getCustomerField(false),
             'company' => 'c.company',
             'risk' => 'r.id_risk',
             'outstanding_allow_amount' => 'c.outstanding_allow_amount',
@@ -214,5 +202,20 @@ final class OutstandingQueryBuilder implements DoctrineQueryBuilderInterface
         if (isset($sortableFields[$criteria->getOrderBy()])) {
             $qb->orderBy($sortableFields[$criteria->getOrderBy()], $criteria->getOrderWay());
         }
+    }
+
+    /**
+     * The customer column is displayed abbreviated to keep it narrow, but a merchant searching it
+     * types the real first name, so the filter has to match the full name.
+     *
+     * @return string
+     */
+    private function getCustomerField(bool $includeFullFirstname = true): string
+    {
+        if ($includeFullFirstname) {
+            return 'CONCAT(c.`firstname`, \' \', c.`lastname`)';
+        }
+
+        return 'CONCAT(LEFT(c.`firstname`, 1), \'. \', c.`lastname`)';
     }
 }

@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\QueryResult;
@@ -45,7 +25,7 @@ class EditableCmsPageCategory
     private $isDisplayed;
 
     /**
-     * @var CmsPageCategoryId
+     * @var CmsPageCategoryId|null
      */
     private $parentId;
 
@@ -58,11 +38,6 @@ class EditableCmsPageCategory
      * @var array
      */
     private $localisedMetaDescription;
-
-    /**
-     * @var array
-     */
-    private $localisedMetaKeywords;
 
     /**
      * @var array
@@ -83,7 +58,6 @@ class EditableCmsPageCategory
      * @param int $parentId
      * @param array $localisedDescription
      * @param array $localisedMetaDescription
-     * @param array $localisedMetaKeywords
      * @param array $metaTitle
      * @param array $localisedFriendlyUrl
      * @param array $shopIds
@@ -96,17 +70,16 @@ class EditableCmsPageCategory
         $parentId,
         array $localisedDescription,
         array $localisedMetaDescription,
-        array $localisedMetaKeywords,
         array $metaTitle,
         array $localisedFriendlyUrl,
         array $shopIds
     ) {
         $this->localisedName = $localisedName;
         $this->isDisplayed = $isDisplayed;
-        $this->parentId = new CmsPageCategoryId($parentId);
+        // The root category has no parent (id_parent 0), which CmsPageCategoryId rejects
+        $this->parentId = 0 === (int) $parentId ? null : new CmsPageCategoryId($parentId);
         $this->localisedDescription = $localisedDescription;
         $this->localisedMetaDescription = $localisedMetaDescription;
-        $this->localisedMetaKeywords = $localisedMetaKeywords;
         $this->localisedFriendlyUrl = $localisedFriendlyUrl;
         $this->metaTitle = $metaTitle;
         $this->shopIds = $shopIds;
@@ -129,7 +102,7 @@ class EditableCmsPageCategory
     }
 
     /**
-     * @return CmsPageCategoryId
+     * @return CmsPageCategoryId|null null for the root category
      */
     public function getParentId()
     {
@@ -150,14 +123,6 @@ class EditableCmsPageCategory
     public function getLocalisedMetaDescription()
     {
         return $this->localisedMetaDescription;
-    }
-
-    /**
-     * @return array
-     */
-    public function getLocalisedMetaKeywords()
-    {
-        return $this->localisedMetaKeywords;
     }
 
     /**

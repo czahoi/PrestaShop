@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 declare(strict_types=1);
 
@@ -33,7 +13,7 @@ use PrestaShopBundle\Form\Admin\Type\TranslatorAwareType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Translation\TranslatorInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 class ProductAttachmentsType extends TranslatorAwareType
 {
@@ -71,6 +51,7 @@ class ProductAttachmentsType extends TranslatorAwareType
                 'remote_url' => $this->urlGenerator->generate('admin_attachments_search', ['searchPhrase' => '__QUERY__']),
                 'placeholder' => $this->trans('Search file', 'Admin.Catalog.Help'),
                 'empty_state' => $this->trans('No files attached', 'Admin.Catalog.Feature'),
+                'identifier_field' => 'attachment_id',
             ])
             ->add('add_attachment_btn', IconButtonType::class, [
                 'label' => $this->trans('Add new file', 'Admin.Catalog.Feature'),
@@ -79,7 +60,7 @@ class ProductAttachmentsType extends TranslatorAwareType
                 'attr' => [
                     'data-success-create-message' => $this->trans(
                         'The file was successfully added.',
-                        'Admin.Catalog.Feature'
+                        'Admin.Catalog.Notification'
                     ),
                     'data-modal-title' => $this->trans('Add new file', 'Admin.Catalog.Feature'),
                     'class' => 'btn-outline-secondary add-attachment',
@@ -100,7 +81,7 @@ class ProductAttachmentsType extends TranslatorAwareType
         parent::configureOptions($resolver);
         $resolver->setDefaults([
             'label' => $this->trans('Attached files', 'Admin.Catalog.Feature'),
-            'label_tag_name' => 'h2',
+            'label_tag_name' => 'h3',
             'label_help_box' => $this->trans('Instructions, size guide, or any file you want to add to a product.', 'Admin.Catalog.Help'),
             'label_subtitle' => $this->trans('Customers can download these files on the product page.', 'Admin.Catalog.Help'),
             'external_link' => [

@@ -1,26 +1,6 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 import $ from 'jquery';
 import prestashop from 'prestashop';
@@ -118,17 +98,26 @@ function showErrorNextToAddtoCartButton(errorMessage) {
  * @param {string} updateUrl
  */
 function updateProduct(event, eventType, updateUrl) {
-  const $productActions = $(prestashop.selectors.product.actions);
+  const $productActions = $(prestashop.selectors.product.actions).last();
   const $quantityWantedInput = $productActions.find(
     prestashop.selectors.quantityWanted,
   );
   const $form = $productActions.find('form:first');
   const formSerialized = $form.serialize();
   let preview = psGetRequestParameter('preview');
-  const updateRatingEvent = new Event('updateRating');
+  let updateRatingEvent;
+
+  if (typeof Event === 'function') {
+    updateRatingEvent = new Event('updateRating');
+  } else {
+    updateRatingEvent = document.createEvent('Event');
+    updateRatingEvent.initEvent('updateRating', true, true);
+  }
 
   if (preview !== null) {
-    preview = `&preview=${preview}`;
+    const adtoken = psGetRequestParameter('adtoken');
+    const idEmployee = psGetRequestParameter('id_employee');
+    preview = `&preview=${preview}&adtoken=${adtoken}&id_employee=${idEmployee}`;
   } else {
     preview = '';
   }
@@ -175,7 +164,7 @@ function updateProduct(event, eventType, updateUrl) {
         + preview,
       method: 'POST',
       data: {
-        quickview: $('.modal.quickview.in').length,
+        quickview: $('.modal.quickview.in, .modal.quickview.show').length,
         ajax: 1,
         action: 'refresh',
         quantity_wanted:
@@ -221,7 +210,17 @@ function updateProduct(event, eventType, updateUrl) {
         $(prestashop.selectors.product.customization)
           .first()
           .replaceWith(data.product_customization);
-        $(prestashop.selectors.product.inputCustomization).val(0);
+
+        // refill customizationId input value when updating quantity or combination
+        if (
+          (eventType === 'updatedProductQuantity' || eventType === 'updatedProductCombination')
+          && data.id_customization
+        ) {
+          $(prestashop.selectors.cart.productCustomizationId).val(data.id_customization);
+        } else {
+          $(prestashop.selectors.product.inputCustomization).val(0);
+        }
+
         $(prestashop.selectors.product.variantsUpdate)
           .first()
           .replaceWith(data.product_variants);
@@ -344,7 +343,7 @@ function showError($container, textError) {
   $container.replaceWith($error);
 }
 
-$(document).ready(() => {
+$(() => {
   const $productActions = $(prestashop.selectors.product.actions);
 
   // Listen on all form elements + those who have a data-product-attribute

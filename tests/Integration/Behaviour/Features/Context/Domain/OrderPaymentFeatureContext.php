@@ -1,34 +1,14 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context\Domain;
 
 use Behat\Gherkin\Node\TableNode;
-use DateTimeImmutable;
-use PHPUnit\Framework\Assert as Assert;
+use Context;
+use PHPUnit\Framework\Assert;
 use PrestaShop\PrestaShop\Core\Domain\Order\Exception\NegativePaymentAmountException;
 use PrestaShop\PrestaShop\Core\Domain\Order\Exception\OrderConstraintException;
 use PrestaShop\PrestaShop\Core\Domain\Order\Payment\Command\AddPaymentCommand;
@@ -60,6 +40,7 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
                 $data['payment_method'],
                 $data['amount'],
                 SharedStorage::getStorage()->get($data['currency']),
+                (int) Context::getContext()->employee->id,
                 isset($data['id_invoice']) ? (int) $data['id_invoice'] : null,
                 $data['transaction_id']
             )
@@ -101,33 +82,52 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
         /** @var OrderForViewing $orderForViewing */
         $orderForViewing = $this->getQueryBus()->handle(new GetOrderForViewing($orderId));
 
-        /** @var OrderPaymentForViewing $orderPaymentForViewing */
-        $orderPaymentForViewing = $this->getFirstPaymentForViewing($orderId, $orderForViewing);
+        $orderPaymentForViewing = $this->getPaymentForViewing($orderId, $orderForViewing, 'first');
         $invoiceNumber = $orderPaymentForViewing->getInvoiceNumber();
         Assert::assertNotNull($invoiceNumber);
     }
 
     /**
-     * @Then order :orderReference payments should have the following details:
+     * @Then order :orderReference payment in :position position should have the following details:
      *
      * @param string $orderReference
      * @param TableNode $table
      */
-    public function queryOrderPaymentsToGetTheFollowingProperties(string $orderReference, TableNode $table)
+    public function checkOrderPayment(string $orderReference, string $position, TableNode $table): void
     {
         $orderId = SharedStorage::getStorage()->get($orderReference);
 
         /** @var OrderForViewing $orderForViewing */
         $orderForViewing = $this->getQueryBus()->handle(new GetOrderForViewing($orderId));
-        /** @var OrderPaymentForViewing $orderPaymentForViewing */
-        $orderPaymentForViewing = $this->getFirstPaymentForViewing($orderId, $orderForViewing);
+
+        $orderPaymentForViewing = $this->getPaymentForViewing($orderId, $orderForViewing, $position);
 
         $dataArray = $table->getRowsHash();
-        $expectedOrderPaymentForViewing = $this->mapToOrderPaymentForViewing(
-            $orderPaymentForViewing->getPaymentId(), $dataArray
-        );
 
-        Assert::assertEquals($expectedOrderPaymentForViewing, $orderPaymentForViewing);
+        if (isset($dataArray['date'])) {
+            Assert::assertEquals(
+                $dataArray['date'],
+                $orderPaymentForViewing->getDate()->format('Y-m-d H:i:s')
+            );
+
+            unset($dataArray['date']);
+        }
+
+        if (isset($dataArray['employee'])) {
+            Assert::assertEquals(
+                $dataArray['employee'],
+                $orderPaymentForViewing->getEmployeeName()
+            );
+
+            unset($dataArray['employee']);
+        }
+
+        foreach ($dataArray as $key => $value) {
+            Assert::assertEquals(
+                $value,
+                $orderPaymentForViewing->{'get' . ucfirst($key)}()
+            );
+        }
     }
 
     /**
@@ -150,6 +150,7 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
                     $data['payment_method'],
                     $data['amount'],
                     SharedStorage::getStorage()->get($data['currency']),
+                    (int) Context::getContext()->employee->id,
                     isset($data['id_invoice']) ? (int) $data['id_invoice'] : null,
                     $data['transaction_id']
                 )
@@ -180,22 +181,6 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
         );
     }
 
-    private function mapToOrderPaymentForViewing(int $paymentId, array $data)
-    {
-        return new OrderPaymentForViewing(
-            $paymentId,
-            new DateTimeImmutable($data['date']),
-            $data['payment_method'],
-            $data['transaction_id'],
-            $data['amount'],
-            isset($data['id_invoice']) ? (int) $data['id_invoice'] : null,
-            '',
-            '',
-            '',
-            ''
-        );
-    }
-
     /**
      * @param TableNode $table
      *
@@ -217,12 +202,13 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
     /**
      * @param int $orderId
      * @param OrderForViewing $orderForViewing
+     * @param string $position
      *
      * @return OrderPaymentForViewing
      *
      * @throws RuntimeException
      */
-    private function getFirstPaymentForViewing(int $orderId, OrderForViewing $orderForViewing): OrderPaymentForViewing
+    private function getPaymentForViewing(int $orderId, OrderForViewing $orderForViewing, string $position): OrderPaymentForViewing
     {
         /** @var OrderPaymentsForViewing $orderPaymentsForViewing */
         $orderPaymentsForViewing = $orderForViewing->getPayments();
@@ -231,9 +217,15 @@ class OrderPaymentFeatureContext extends AbstractDomainFeatureContext
         if (count($orderPaymentForViewingArray) == 0) {
             throw new RuntimeException('Order [' . $orderId . '] has no payments for viewing');
         }
-        /** @var OrderPaymentForViewing $orderPaymentForViewing */
-        $orderPaymentForViewing = $orderPaymentForViewingArray[0];
 
-        return $orderPaymentForViewing;
+        $indexes = [
+            'first' => 0,
+            'second' => 1,
+            'third' => 2,
+            'fourth' => 3,
+            'last' => count($orderPaymentForViewingArray) - 1,
+        ];
+
+        return $orderPaymentForViewingArray[$indexes[$position] ?? $position];
     }
 }

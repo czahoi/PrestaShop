@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -30,6 +10,8 @@ namespace PrestaShop\PrestaShop\Core\Util;
 
 use ArrayAccess;
 use Countable;
+use ReturnTypeWillChange;
+use Symfony\Component\PropertyAccess\Exception\UnexpectedTypeException;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
 
@@ -65,7 +47,7 @@ class ArrayFinder implements ArrayAccess, Countable
     /**
      * {@inheritdoc}
      */
-    public function count()
+    public function count(): int
     {
         return count($this->array);
     }
@@ -81,14 +63,19 @@ class ArrayFinder implements ArrayAccess, Countable
      * $arrayFinder->get('a.e.9');
      * $arrayFinder->get('4');
      */
-    public function get(string $path = null, $default = null)
+    public function get(?string $path = null, $default = null)
     {
         if ($path === null) {
             return $this->array;
         }
         $path = $this->convertDotPathToArrayPath($path);
 
-        $value = $this->propertyAccessor->getValue($this->array, $path);
+        try {
+            $value = $this->propertyAccessor->getValue($this->array, $path);
+        } catch (UnexpectedTypeException) {
+            // If a value within the path is neither object nor array
+            return null;
+        }
 
         if (null !== $value) {
             return $value;
@@ -124,15 +111,15 @@ class ArrayFinder implements ArrayAccess, Countable
      *
      * Example of use: isset($this->arrayFinder['a']
      */
-    public function offsetExists($offset)
+    public function offsetExists($offset): bool
     {
         if (is_int($offset)) {
             $offset = (string) $offset;
         }
 
         return $this->propertyAccessor->isReadable(
-                $this->array,
-                $this->convertDotPathToArrayPath($offset))
+            $this->array,
+            $this->convertDotPathToArrayPath($offset))
             && ($this->get($offset) !== null)
         ;
     }
@@ -144,6 +131,7 @@ class ArrayFinder implements ArrayAccess, Countable
      * $arrayFinder[4];
      * $arrayFinder['a'];
      */
+    #[ReturnTypeWillChange]
     public function offsetGet($offset)
     {
         if (is_int($offset)) {
@@ -158,7 +146,7 @@ class ArrayFinder implements ArrayAccess, Countable
      *
      * Example of use: $this->arrayFinder['a'] = $value;
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet($offset, $value): void
     {
         if (is_int($offset)) {
             $offset = (string) $offset;
@@ -176,7 +164,7 @@ class ArrayFinder implements ArrayAccess, Countable
      *
      * Example of use: unset($this->arrayFinder['a']);
      */
-    public function offsetUnset($offset)
+    public function offsetUnset($offset): void
     {
         if (is_int($offset)) {
             $offset = (string) $offset;
@@ -202,6 +190,6 @@ class ArrayFinder implements ArrayAccess, Countable
         $expl = explode('.', $dotPath);
         $in = implode('][', $expl);
 
-        return '[' . $in . ']';
+        return str_replace('[]', '[0]', '[' . $in . ']');
     }
 }

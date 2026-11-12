@@ -1,28 +1,7 @@
 <?php
-
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -36,18 +15,20 @@ use CartRule;
 use Configuration;
 use Context;
 use Currency;
+use DateTime;
 use Db;
 use Exception;
 use Group;
 use Order;
-use PHPUnit\Framework\TestCase;
+use PrestaShop\PrestaShop\Core\Domain\Carrier\ValueObject\OutOfRangeBehavior;
 use Product;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Tax;
 use TaxRule;
 use TaxRulesGroup;
 use Tools;
 
-class CartTest extends TestCase
+class CartTest extends KernelTestCase
 {
     /**
      * @var int
@@ -131,7 +112,7 @@ class CartTest extends TestCase
         $name = $rate . '% TAX';
 
         if (!array_key_exists($name, $taxes)) {
-            $tax = new Tax(null, Configuration::get('PS_LANG_DEFAULT'));
+            $tax = new Tax(null, (int) Configuration::get('PS_LANG_DEFAULT'));
             $tax->name = $name;
             $tax->rate = $rate;
             $tax->active = true;
@@ -145,19 +126,19 @@ class CartTest extends TestCase
     /**
      * This is cached by $rate.
      */
-    private static function getIdTaxRulesGroup(int $rate): string
+    private static function getIdTaxRulesGroup(int $rate): int
     {
         static $groups = [];
 
         $name = $rate . '% TRG';
 
         if (!array_key_exists($name, $groups)) {
-            $taxRulesGroup = new TaxRulesGroup(null, Configuration::get('PS_LANG_DEFAULT'));
+            $taxRulesGroup = new TaxRulesGroup(null, (int) Configuration::get('PS_LANG_DEFAULT'));
             $taxRulesGroup->name = $name;
             $taxRulesGroup->active = true;
             self::assertTrue((bool) $taxRulesGroup->save());
 
-            $taxRule = new TaxRule(null, Configuration::get('PS_LANG_DEFAULT'));
+            $taxRule = new TaxRule(null, (int) Configuration::get('PS_LANG_DEFAULT'));
             $taxRule->id_tax = self::getIdTax($rate);
             $taxRule->id_country = Configuration::get('PS_COUNTRY_DEFAULT');
             $taxRule->id_tax_rules_group = $taxRulesGroup->id;
@@ -167,19 +148,19 @@ class CartTest extends TestCase
             $groups[$name] = $taxRulesGroup->id;
         }
 
-        return $groups[$name];
+        return (int) $groups[$name];
     }
 
     /**
      * This is cached by $name.
      */
-    private static function makeProduct(string $name, float $price, string $id_tax_rules_group): Product
+    private static function makeProduct(string $name, float $price, int $id_tax_rules_group): Product
     {
-        $product = new Product(null, false, Configuration::get('PS_LANG_DEFAULT'));
+        $product = new Product(null, false, (int) Configuration::get('PS_LANG_DEFAULT'));
         $product->id_tax_rules_group = $id_tax_rules_group;
         $product->name = $name;
         $product->price = $price;
-        $product->link_rewrite = Tools::link_rewrite($name);
+        $product->link_rewrite = Tools::str2url($name);
         self::assertTrue($product->save());
 
         return $product;
@@ -188,7 +169,7 @@ class CartTest extends TestCase
     private static function makeAddress(): Address
     {
         $address = new Address();
-        $address->id_country = Configuration::get('PS_COUNTRY_DEFAULT');
+        $address->id_country = (int) Configuration::get('PS_COUNTRY_DEFAULT');
         $address->firstname = 'Unit';
         $address->lastname = 'Tester';
         $address->address1 = '55 rue Raspail';
@@ -201,8 +182,8 @@ class CartTest extends TestCase
 
     private static function makeCart(): Cart
     {
-        $cart = new Cart(null, Configuration::get('PS_LANG_DEFAULT'));
-        $cart->id_currency = Configuration::get('PS_CURRENCY_DEFAULT');
+        $cart = new Cart(null, (int) Configuration::get('PS_LANG_DEFAULT'));
+        $cart->id_currency = Currency::getDefaultCurrencyId();
         $cart->id_address_invoice = self::$id_address;
         self::assertTrue($cart->save());
         Context::getContext()->cart = $cart;
@@ -214,12 +195,12 @@ class CartTest extends TestCase
      * null $shippingCost is interpreted as free shipping
      * Carriers are cached by $name.
      */
-    private static function getIdCarrier(string $name, int $shippingCost = null, string $id_tax_rules_group = null): string
+    private static function getIdCarrier(string $name, ?int $shippingCost = null, ?int $id_tax_rules_group = null): int
     {
         static $carriers = [];
 
         if (!array_key_exists($name, $carriers)) {
-            $carrier = new Carrier(null, Configuration::get('PS_LANG_DEFAULT'));
+            $carrier = new Carrier(null, (int) Configuration::get('PS_LANG_DEFAULT'));
 
             $carrier->name = $name;
             $carrier->delay = '28 days later';
@@ -227,7 +208,7 @@ class CartTest extends TestCase
             if (null === $shippingCost) {
                 $carrier->is_free = true;
             } else {
-                $carrier->range_behavior = false; // take highest range
+                $carrier->range_behavior = (bool) OutOfRangeBehavior::USE_HIGHEST_RANGE;
                 $carrier->shipping_method = Carrier::SHIPPING_METHOD_PRICE;
             }
 
@@ -263,7 +244,7 @@ class CartTest extends TestCase
                 );
             }
 
-            $carriers[$name] = $carrier->id;
+            $carriers[$name] = (int) $carrier->id;
         }
 
         return $carriers[$name];
@@ -271,12 +252,12 @@ class CartTest extends TestCase
 
     private static function makeCartRule(int $amount, string $type): CartRule
     {
-        $cartRule = new CartRule(null, Configuration::get('PS_LANG_DEFAULT'));
+        $cartRule = new CartRule(null, (int) Configuration::get('PS_LANG_DEFAULT'));
 
         $cartRule->name = $amount . ' ' . $type . ' Cart Rule';
 
-        $date_from = new \DateTime();
-        $date_to = new \DateTime();
+        $date_from = new DateTime();
+        $date_to = new DateTime();
 
         $date_from->modify('-2 days');
         $date_to->modify('+2 days');
@@ -285,7 +266,6 @@ class CartTest extends TestCase
         $cartRule->date_to = $date_to->format('Y-m-d H:i:s');
 
         $cartRule->quantity = 1;
-        $cartRule->quantity_per_user;
 
         if ($type === 'before tax') {
             $cartRule->reduction_amount = $amount;
@@ -311,8 +291,16 @@ class CartTest extends TestCase
     {
         parent::setUp();
 
+        // Init Symfony so the container is reachable: Cart computations resolve services through
+        // ContainerFinder (e.g. the discount feature flag in Cart::getCartRules). Without booting here the
+        // class only passed inside the full suite, relying on a kernel a previous test happened to leave booted.
+        self::bootKernel();
+        // Global var read by SymfonyContainer::getInstance() / ContainerFinder.
+        global $kernel;
+        $kernel = self::$kernel;
+
         // Context needs a currency but doesn't set it by itself, use default one.
-        Context::getContext()->currency = new Currency(Configuration::get('PS_CURRENCY_DEFAULT'));
+        Context::getContext()->currency = Currency::getDefaultCurrency();
 
         Group::clearCachedValues();
         self::setRoundingType('line');
@@ -337,6 +325,29 @@ class CartTest extends TestCase
         $this->assertEquals(12, $cart->getOrderTotal(true, Cart::ONLY_PRODUCTS));
     }
 
+    public function testProductQuantityOfAnUnsavedCartIsZeroWithoutQuery(): void
+    {
+        $cart = new Cart(null, (int) Configuration::get('PS_LANG_DEFAULT'));
+
+        $database = $this->createMock(Db::class);
+        $database->expects($this->never())->method('getRow');
+        Db::setInstanceForTesting($database);
+        try {
+            $this->assertSame(['deep_quantity' => '0', 'quantity' => '0'], $cart->getProductQuantity(1));
+        } finally {
+            Db::deleteTestingInstance();
+        }
+    }
+
+    public function testProductQuantityOfASavedCart(): void
+    {
+        $product = self::makeProduct('Saved cart product', 10, self::getIdTaxRulesGroup(20));
+        $cart = self::makeCart();
+        $cart->updateQty(2, $product->id);
+
+        $this->assertEquals(['deep_quantity' => 2, 'quantity' => 2], $cart->getProductQuantity((int) $product->id));
+    }
+
     public function testCartBothWithFreeCarrier(): void
     {
         $product = self::makeProduct('Hello Product', 10, self::getIdTaxRulesGroup(20));
@@ -359,6 +370,73 @@ class CartTest extends TestCase
         $cart->updateQty(1, $product->id);
         $this->assertEquals(12, $cart->getOrderTotal(false, Cart::BOTH, null, $id_carrier));
         $this->assertEquals(13.2, $cart->getOrderTotal(true, Cart::BOTH, null, $id_carrier));
+    }
+
+    public function testDeliveryOptionListCacheIsScopedByDeliveryAddress(): void
+    {
+        Cart::resetStaticCache();
+
+        $firstAddress = self::makeAddress();
+        $secondAddress = self::makeAddress();
+
+        $this->assertNotSame(
+            (int) $firstAddress->id,
+            (int) $secondAddress->id
+        );
+
+        $product = self::makeProduct(
+            'Delivery option cache product',
+            10,
+            self::getIdTaxRulesGroup(20)
+        );
+
+        // Passing a shipping cost also associates the carrier with all zones.
+        self::getIdCarrier('Delivery option cache carrier', 2);
+
+        $cart = self::makeCart();
+        $cart->id_address_delivery = (int) $firstAddress->id;
+        $cart->id_address_invoice = (int) $firstAddress->id;
+
+        $this->assertTrue($cart->update());
+
+        $cart->updateQty(1, (int) $product->id);
+
+        // Warm the delivery option cache using the first address.
+        $firstAddressDeliveryOptions = $cart->getDeliveryOptionList();
+
+        $this->assertArrayHasKey(
+            (int) $firstAddress->id,
+            $firstAddressDeliveryOptions
+        );
+        $this->assertArrayNotHasKey(
+            (int) $secondAddress->id,
+            $firstAddressDeliveryOptions
+        );
+
+        /*
+        * Change the delivery address in the same PHP process.
+        *
+        * Cart::update() does not reset the delivery option cache, so the next
+        * call must use a cache entry scoped by the new delivery address.
+        */
+        $cart->id_address_delivery = (int) $secondAddress->id;
+
+        $this->assertTrue($cart->update());
+
+        /*
+        * Do not use $flush = true here: forcing a recalculation would hide
+        * the cache-key regression.
+        */
+        $secondAddressDeliveryOptions = $cart->getDeliveryOptionList();
+
+        $this->assertArrayHasKey(
+            (int) $secondAddress->id,
+            $secondAddressDeliveryOptions
+        );
+        $this->assertArrayNotHasKey(
+            (int) $firstAddress->id,
+            $secondAddressDeliveryOptions
+        );
     }
 
     public function testBasicRoundTypeLine(): void
@@ -399,7 +477,7 @@ class CartTest extends TestCase
 
         $product = self::makeProduct('Yo Product', 10, self::getIdTaxRulesGroup(20));
 
-        self::makeCartRule(5, 'before tax')->id;
+        self::makeCartRule(5, 'before tax');
         $cart = self::makeCart();
 
         $cart->updateQty(1, $product->id);

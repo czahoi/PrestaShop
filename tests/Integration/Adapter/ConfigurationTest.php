@@ -1,39 +1,22 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
 namespace Tests\Integration\Adapter;
 
-use Doctrine\ORM\EntityManager;
+use Configuration as LegacyConfiguration;
 use PrestaShop\PrestaShop\Adapter\Configuration;
+use PrestaShop\PrestaShop\Core\Addon\Theme\Theme;
 use PrestaShop\PrestaShop\Core\Domain\Shop\ValueObject\ShopConstraint;
 use PrestaShopBundle\Entity\Shop;
 use PrestaShopBundle\Entity\ShopGroup;
+use Shop as LegacyShop;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Tests\Resources\DatabaseDump;
 
 class ConfigurationTest extends KernelTestCase
 {
@@ -42,20 +25,25 @@ class ConfigurationTest extends KernelTestCase
      */
     private $configuration;
 
-    /**
-     * @var EntityManager
-     */
-    private $entityManager;
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        static::initMultistore();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        parent::tearDownAfterClass();
+        DatabaseDump::restoreAllTables();
+        LegacyShop::resetStaticCache();
+        LegacyConfiguration::resetStaticCache();
+    }
 
     protected function setUp(): void
     {
         self::bootKernel();
-
         $container = self::$kernel->getContainer();
-        $this->entityManager = $container->get('doctrine.orm.entity_manager');
         $this->configuration = $container->get('prestashop.adapter.legacy.configuration');
-
-        $this->initMultistore();
     }
 
     /**
@@ -86,6 +74,7 @@ class ConfigurationTest extends KernelTestCase
      * @param array $setParams
      * @param array $getParams
      * @param bool $expectedResult
+     *
      * @dataProvider hasProvider
      */
     public function testHas(array $setParams, array $getParams, bool $expectedResult): void
@@ -453,35 +442,38 @@ class ConfigurationTest extends KernelTestCase
                 $this->configuration->set($params['key'], $params['value'], $params['shopConstraint']);
             }
         }
+        LegacyConfiguration::resetStaticCache();
         $result = $this->configuration->get($getParams['key'], $getParams['default'], $getParams['shopConstraint']);
         $this->assertEquals($expectedResult, $result);
     }
 
-    private function initMultistore(): void
+    protected static function initMultistore(): void
     {
-        // we want to execute this only once for the whole class
-        $flag = $this->configuration->get('CONFIGURATION_INTEGRATION_TEST_FLAG');
+        DatabaseDump::restoreAllTables();
+        LegacyConfiguration::resetStaticCache();
+        LegacyShop::resetStaticCache();
+        self::bootKernel();
+        $container = self::$kernel->getContainer();
+        $configuration = $container->get('prestashop.adapter.legacy.configuration');
+        $entityManager = $container->get('doctrine.orm.entity_manager');
 
-        if ($flag === null) {
-            // activate multistore
-            $this->configuration->set('PS_MULTISHOP_FEATURE_ACTIVE', 1);
+        // activate multistore
+        $configuration->set('PS_MULTISHOP_FEATURE_ACTIVE', 1);
 
-            // add a shop in existing group
-            $shopGroup = $this->entityManager->find(ShopGroup::class, 1);
-            $shop = new Shop();
-            $shop->setActive(true);
-            $shop->setIdCategory(2);
-            $shop->setName('test_shop_2');
-            $shop->setShopGroup($shopGroup);
-            $shop->setColor('red');
-            $shop->setThemeName('classic');
-            $shop->setDeleted(false);
+        // add a shop in existing group
+        $shopGroup = $entityManager->find(ShopGroup::class, 1);
+        $shop = new Shop();
+        $shop->setActive(true);
+        $shop->setIdCategory(2);
+        $shop->setName('test_shop_2');
+        $shop->setShopGroup($shopGroup);
+        $shop->setColor('red');
+        $shop->setThemeName(Theme::getDefaultTheme());
+        $shop->setDeleted(false);
 
-            $this->entityManager->persist($shop);
-            $this->entityManager->flush();
+        $entityManager->persist($shop);
+        $entityManager->flush();
 
-            // activate flag
-            $this->configuration->set('CONFIGURATION_INTEGRATION_TEST_FLAG', 1);
-        }
+        LegacyShop::resetStaticCache();
     }
 }

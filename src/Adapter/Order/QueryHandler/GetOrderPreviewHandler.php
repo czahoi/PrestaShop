@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShop\PrestaShop\Adapter\Order\QueryHandler;
@@ -35,8 +15,10 @@ use Order;
 use OrderCarrier;
 use PrestaShop\Decimal\DecimalNumber;
 use PrestaShop\PrestaShop\Adapter\Address\AddressFormatter;
+use PrestaShop\PrestaShop\Adapter\Carrier\TrackingUrlFormatter;
 use PrestaShop\PrestaShop\Adapter\Entity\Address;
 use PrestaShop\PrestaShop\Core\Address\AddressFormatterInterface;
+use PrestaShop\PrestaShop\Core\CommandBus\Attributes\AsQueryHandler;
 use PrestaShop\PrestaShop\Core\Domain\Address\ValueObject\AddressId;
 use PrestaShop\PrestaShop\Core\Domain\Order\Exception\OrderNotFoundException;
 use PrestaShop\PrestaShop\Core\Domain\Order\Query\GetOrderPreview;
@@ -47,6 +29,7 @@ use PrestaShop\PrestaShop\Core\Domain\Order\QueryResult\OrderPreviewProductDetai
 use PrestaShop\PrestaShop\Core\Domain\Order\QueryResult\OrderPreviewShippingDetails;
 use PrestaShop\PrestaShop\Core\Domain\Order\ValueObject\OrderId;
 use PrestaShop\PrestaShop\Core\Localization\Locale\Repository as LocaleRepository;
+use PrestaShop\PrestaShop\Core\Util\Sorter;
 use State;
 use StockAvailable;
 use Validate;
@@ -54,6 +37,7 @@ use Validate;
 /**
  * Handles GetOrderPreview query using legacy object model
  */
+#[AsQueryHandler]
 final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
 {
     /**
@@ -79,7 +63,7 @@ final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
     public function __construct(
         LocaleRepository $localeRepository,
         string $locale,
-        AddressFormatterInterface $addressFormatter = null
+        ?AddressFormatterInterface $addressFormatter = null
     ) {
         $this->localeRepository = $localeRepository;
         $this->locale = $locale;
@@ -147,7 +131,7 @@ final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
             $address->postcode,
             $stateName,
             $country->name[(int) $order->getAssociatedLanguage()->getId()],
-            $customer->email ?? null,
+            $customer->email,
             $address->phone,
             $dni
         );
@@ -171,7 +155,7 @@ final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
 
         if (Validate::isLoadedObject($carrier)) {
             $carrierName = $carrier->name;
-            $trackingUrl = str_replace('@', $orderCarrier->tracking_number ?: '@', $carrier->url);
+            $trackingUrl = TrackingUrlFormatter::format($carrier->url, $orderCarrier->tracking_number ?: '@', $order);
         }
 
         $dni = Address::dniRequired($address->id_country) ? $address->dni : null;
@@ -208,7 +192,12 @@ final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
 
         $taxCalculationMethod = $this->getOrderTaxCalculationMethod($order);
 
-        foreach ($order->getProductsDetail() as $detail) {
+        $orderDetails = $order->getProductsDetail();
+        // Sort products by Reference ID (and if equals (like combination) by Supplier Reference)
+        $sorter = new Sorter();
+        $orderDetails = $sorter->natural($orderDetails, Sorter::ORDER_DESC, 'product_reference', 'product_supplier_reference');
+
+        foreach ($orderDetails as $detail) {
             $unitPrice = $detail['unit_price_tax_excl'];
             $totalPrice = $detail['total_price_tax_excl'];
 
@@ -233,7 +222,8 @@ final class GetOrderPreviewHandler implements GetOrderPreviewHandlerInterface
                 (int) $detail['product_quantity'],
                 $locale->formatPrice($unitPrice, $currency->iso_code),
                 $locale->formatPrice($totalPrice, $currency->iso_code),
-                $locale->formatPrice((string) $totalTaxAmount, $currency->iso_code)
+                $locale->formatPrice((string) $totalTaxAmount, $currency->iso_code),
+                (int) $detail['id_product']
             );
         }
 

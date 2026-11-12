@@ -1,27 +1,8 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
+import ComponentsMap from '@components/components-map';
 import {EventEmitter} from './event-emitter';
 
 const {$} = window;
@@ -79,11 +60,13 @@ class TinyMCEEditor {
   initTinyMCE(config) {
     const cfg = {
       selector: '.rte',
-      plugins: 'align colorpicker link image filemanager table media placeholder lists advlist code table autoresize',
+      plugins:
+        /* eslint-disable-next-line max-len */
+        'align colorpicker link image filemanager table media placeholder lists advlist code table autoresize hr',
       browser_spellcheck: true,
       toolbar1:
         /* eslint-disable-next-line max-len */
-        'code,colorpicker,bold,italic,underline,strikethrough,blockquote,link,align,bullist,numlist,table,image,media,formatselect',
+        'code,colorpicker,bold,italic,underline,strikethrough,blockquote,link,align,bullist,numlist,table,image,media,formatselect,hr',
       toolbar2: '',
       language: window.iso_user,
       external_filemanager_path: `${config.baseAdminUrl}filemanager/`,
@@ -95,10 +78,10 @@ class TinyMCEEditor {
       skin: 'prestashop',
       mobile: {
         theme: 'mobile',
-        plugins: ['lists', 'align', 'link', 'table', 'placeholder', 'advlist', 'code'],
+        plugins: ['lists', 'align', 'link', 'table', 'placeholder', 'advlist', 'code', 'hr'],
         toolbar:
           /* eslint-disable-next-line max-len */
-          'undo code colorpicker bold italic underline strikethrough blockquote link align bullist numlist table formatselect styleselect',
+          'undo code colorpicker bold italic underline strikethrough blockquote link align bullist numlist table formatselect styleselect hr',
       },
       menubar: false,
       statusbar: false,
@@ -109,7 +92,7 @@ class TinyMCEEditor {
       valid_children: '+*[*]',
       valid_elements: '*[*]',
       rel_list: [{title: 'nofollow', value: 'nofollow'}],
-      editor_selector: 'autoload_rte',
+      editor_selector: ComponentsMap.tineMceEditor.selectorClass,
       init_instance_callback: () => {
         this.changeToMaterial();
       },
@@ -126,6 +109,10 @@ class TinyMCEEditor {
     if (typeof cfg.editor_selector !== 'undefined') {
       cfg.selector = `.${cfg.editor_selector}`;
     }
+
+    EventEmitter.emit('initTinyMCE', {
+      config: cfg,
+    });
 
     // Change icons in popups
     $('body').on('click', '.mce-btn, .mce-open, .mce-menu-item', () => {
@@ -194,6 +181,22 @@ class TinyMCEEditor {
       const textareaLinkSelector = `.nav-item a[data-locale="${data.selectedLocale}"]`;
 
       $(textareaLinkSelector).click();
+    });
+
+    // The autoresize plugin sizes an editor when it initializes and whenever its content
+    // changes. Both can happen while the editor sits in a hidden tab, where it measures as
+    // empty and collapses to the minimum height, and nothing sizes it again once the tab is
+    // shown. So ask for a size again on every tab change, for the editors visible by then.
+    // 'setcontent' is one of the events the plugin sizes on, and firing it without changing
+    // the content leaves the content, the undo stack and the dirty flag alone.
+    $(document).on('shown.bs.tab', () => {
+      window.tinyMCE.editors.forEach((editor) => {
+        const container = editor.getContainer();
+
+        if (container && $(container).is(':visible')) {
+          editor.fire('setcontent', {});
+        }
+      });
     });
   }
 

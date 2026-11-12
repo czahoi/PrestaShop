@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShop\PrestaShop\Core\CMS;
@@ -29,6 +9,7 @@ namespace PrestaShop\PrestaShop\Core\CMS;
 use PrestaShop\PrestaShop\Core\CommandBus\CommandBusInterface;
 use PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\Exception\CmsPageCategoryException;
 use PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\Query\GetCmsPageCategoriesForBreadcrumb;
+use PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\Query\GetCmsPageParentCategoryIdForRedirection;
 use PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\QueryResult\Breadcrumb;
 use PrestaShop\PrestaShop\Core\Domain\CmsPageCategory\ValueObject\CmsPageCategoryId;
 
@@ -59,8 +40,32 @@ final class CmsPageViewDataProvider implements CmsPageViewDataProviderInterface
     {
         return [
             'root_category_id' => CmsPageCategoryId::ROOT_CMS_PAGE_CATEGORY_ID,
+            'parent_category_id' => $this->getParentCategoryId((int) $cmsCategoryParentId),
             'breadcrumb_tree' => $this->getBreadcrumbTree($cmsCategoryParentId),
         ];
+    }
+
+    /**
+     * Gets the category one level above the one being listed, so that "Back to list" climbs the tree
+     * instead of jumping to the root. Falls back to the root when there is nothing above.
+     *
+     * @param int $cmsCategoryId
+     *
+     * @return int
+     */
+    private function getParentCategoryId($cmsCategoryId)
+    {
+        if (CmsPageCategoryId::ROOT_CMS_PAGE_CATEGORY_ID === $cmsCategoryId) {
+            return CmsPageCategoryId::ROOT_CMS_PAGE_CATEGORY_ID;
+        }
+
+        try {
+            return $this->queryBus->handle(
+                new GetCmsPageParentCategoryIdForRedirection($cmsCategoryId)
+            )->getValue();
+        } catch (CmsPageCategoryException) {
+            return CmsPageCategoryId::ROOT_CMS_PAGE_CATEGORY_ID;
+        }
     }
 
     /**

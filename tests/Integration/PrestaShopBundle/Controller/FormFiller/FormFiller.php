@@ -1,35 +1,20 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
 namespace Tests\Integration\PrestaShopBundle\Controller\FormFiller;
 
-use FormField;
+use DOMElement;
+use InvalidArgumentException;
+use PrestaShopBundle\Form\Extension\DisablingSwitchExtension;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\DomCrawler\Field\ChoiceFormField;
+use Symfony\Component\DomCrawler\Field\FormField;
+use Symfony\Component\DomCrawler\Field\InputFormField;
 use Symfony\Component\DomCrawler\Form;
 
 class FormFiller
@@ -46,7 +31,21 @@ class FormFiller
             if (!is_array($formValue)) {
                 /** @var FormField $formField */
                 $formField = $form->get($fieldName);
-                $formField->setValue($formValue);
+                // Checkbox inputs must be used via tick/untick or exceptions are triggered because of invalid choices
+                if ($formField instanceof ChoiceFormField && $formField->getType() === 'checkbox') {
+                    if (boolval($formValue)) {
+                        $formField->tick();
+                    } else {
+                        $formField->untick();
+                    }
+                } else {
+                    // The form component converts boolean values into string ones, so we must do the same thing to remain compatible
+                    if ($formField instanceof ChoiceFormField && is_bool($formValue)) {
+                        $formValue = $formValue ? '1' : '0';
+                    }
+                    $formField->setValue((string) $formValue);
+                }
+                $this->enabledAssociatedField($form, $formField);
 
                 continue;
             }
@@ -78,5 +77,46 @@ class FormFiller
         }
 
         return $form;
+    }
+
+    /**
+     * Some fields are based on the DisablingSwitchExtension in regular FO the field are enabled by JS but here
+     * we need to force this or the data will be removed from the $form->getData()
+     *
+     * @param Form $form
+     * @param FormField $formField
+     */
+    private function enabledAssociatedField(Form $form, FormField $formField): void
+    {
+        if (strpos($formField->getName(), DisablingSwitchExtension::FIELD_PREFIX) === false) {
+            return;
+        }
+
+        $associatedFieldName = str_replace(DisablingSwitchExtension::FIELD_PREFIX, '', $formField->getName());
+        try {
+            /** @var InputFormField $associatedField */
+            $associatedField = $form->get($associatedFieldName);
+        } catch (InvalidArgumentException $e) {
+            return;
+        }
+
+        $formCrawler = new Crawler($form->getFormNode());
+        $fieldCrawler = $formCrawler->filter(sprintf('[name="%s"]', $associatedFieldName));
+        if (!$fieldCrawler->count()) {
+            return;
+        }
+
+        $fieldNode = $fieldCrawler->getNode(0);
+        if (!$fieldNode instanceof DOMElement) {
+            return;
+        }
+
+        $isDisabled = $associatedField->isDisabled();
+        $isDisabling = (bool) $formField->getValue() === false;
+        if ($isDisabled && !$isDisabling) {
+            $fieldNode->removeAttribute('disabled');
+        } elseif (!$isDisabled && $isDisabling) {
+            $fieldNode->setAttribute('disabled', 'disabled');
+        }
     }
 }

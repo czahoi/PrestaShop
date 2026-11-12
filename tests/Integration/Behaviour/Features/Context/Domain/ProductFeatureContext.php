@@ -1,38 +1,19 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Behaviour\Features\Context\Domain;
 
 use Cache;
 use Category;
-use Context;
 use Customer;
 use GroupReduction;
+use PrestaShop\PrestaShop\Adapter\Product\Repository\ProductRepository;
 use PrestaShop\PrestaShop\Core\Domain\Product\Query\SearchProducts;
 use PrestaShop\PrestaShop\Core\Domain\Product\QueryResult\FoundProduct;
+use PrestaShop\PrestaShop\Core\Domain\Shop\ValueObject\ShopConstraint;
 use Product;
 use RuntimeException;
 use Tests\Integration\Behaviour\Features\Context\SharedStorage;
@@ -118,6 +99,64 @@ class ProductFeatureContext extends AbstractDomainFeatureContext
     }
 
     /**
+     * Imported products are identified by their reference, not their name: the name is localized
+     * and may repeat, the reference is what a CSV row matches on.
+     *
+     * @Then there is a product :productReference with reference :reference
+     */
+    public function storeProductReferenceByProductReference(string $productReference, string $reference): void
+    {
+        // every shop: an import is scoped to one, but a scenario asserting what it produced has no
+        // reason to care which
+        $productIds = $this->getProductRepository()->getProductIdsByReference(
+            $reference,
+            ShopConstraint::allShops()
+        );
+
+        if (empty($productIds)) {
+            throw new RuntimeException(sprintf('No product has the reference "%s"', $reference));
+        }
+        if (count($productIds) > 1) {
+            throw new RuntimeException(sprintf('Reference "%s" matches %d products', $reference, count($productIds)));
+        }
+
+        $this->getSharedStorage()->set($productReference, (int) reset($productIds));
+    }
+
+    /**
+     * A row an import refused leaves nothing behind, and nothing to store a reference for.
+     *
+     * @Then there should be no product with reference :reference
+     */
+    public function assertNoProductWithReference(string $reference): void
+    {
+        $productIds = $this->getProductRepository()->getProductIdsByReference($reference, ShopConstraint::allShops());
+
+        if (!empty($productIds)) {
+            throw new RuntimeException(sprintf('Reference "%s" unexpectedly matches %d product(s)', $reference, count($productIds)));
+        }
+    }
+
+    /**
+     * For the rows that carry their own id, where nothing else identifies the product.
+     *
+     * @Then there is a product :productReference with id :productId
+     */
+    public function storeProductReferenceByProductId(string $productReference, int $productId): void
+    {
+        if (!Product::existsInDatabase($productId, 'product')) {
+            throw new RuntimeException(sprintf('No product has the id %d', $productId));
+        }
+
+        $this->getSharedStorage()->set($productReference, $productId);
+    }
+
+    private function getProductRepository(): ProductRepository
+    {
+        return $this->getContainer()->get(ProductRepository::class);
+    }
+
+    /**
      * @param string $productName
      *
      * @return int
@@ -125,7 +164,7 @@ class ProductFeatureContext extends AbstractDomainFeatureContext
     private function getProductIdByName(string $productName): int
     {
         /** @var FoundProduct[] */
-        $products = $this->getQueryBus()->handle(new SearchProducts($productName, 1, Context::getContext()->currency->iso_code));
+        $products = $this->getQueryBus()->handle(new SearchProducts($productName, 1, $this->getDefaultCurrencyIsoCode()));
 
         if (empty($products)) {
             throw new RuntimeException(sprintf('Product with name "%s" was not found', $productName));

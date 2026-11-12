@@ -1,0 +1,16 @@
+services:
+  _defaults:
+    public: false
+
+  PrestaShopBundle\EventListener\Console\MultishopCommandListener:
+    arguments:
+      - "@prestashop.adapter.shop.context"
+      - "@=service('kernel').getRootDir()"
+    tags:
+      - { name: kernel.event_listener, event: console.command, method: onConsoleCommand }
+
+  # After MultishopCommandListener, so that the default currency is the one of the shop passed with --id_shop
+  PrestaShopBundle\EventListener\Console\CurrencyContextCommandListener:
+    autowire: true
+    tags:
+      - { name: kernel.event_listener, event: console.command, method: onConsoleCommand, priority: -10 }

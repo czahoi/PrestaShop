@@ -1,27 +1,7 @@
-{#**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
- *#}
+{#
+ # For the full copyright and license information, please view the
+ # docs/licenses/LICENSE.txt file that was distributed with this source code.
+ #}
 
 {% block entity_search_input_widget %}
   {# We cannot use the escape filter for remote_url or it breaks the url and it is not callable any more #}
@@ -29,26 +9,34 @@
     'data-prototype-template': form_row(prototype),
     'data-prototype-index': prototype.vars.name|e('html_attr'),
     'data-prototype-mapping': prototype_mapping|json_encode,
+    'data-identifier-field': identifier_field,
+    'data-filtered-identities': filtered_identities|json_encode,
     'data-remove-modal': remove_modal|json_encode,
     'data-remote-url': remote_url,
     'data-data-limit': limit,
-    'data-allow-delete': form.vars.allow_delete ? 1 : 0
+    'data-min-length': min_length,
+    'data-allow-delete': form.vars.allow_delete ? 1 : 0,
+    'data-suggestion-field': form.vars.suggestion_field,
   }) -%}
-  {%- set attr = attr|merge({'class': (attr.class|default('') ~ ' entity-search-widget')|trim }) -%}
+  {%- set attr = attr|merge({class: (attr.class|default('') ~ ' entity-search-widget')|trim}) -%}
 
   {# We use widget_container_attributes in this widget because we do not want the name property #}
   <div {{ block('widget_container_attributes') }}>
-    <div class="search search-with-icon">
-      {%- set attr = search_attr|merge({
-        'class': (search_attr.class|default('') ~ ' entity-search-input form-control')|trim,
-        'autocomplete': 'off',
-        'placeholder': placeholder,
-        'type': 'text'
-      }) -%}
-      {%- set id = form.vars.id ~ '_search_input' -%}
-      <input {{ block('widget_container_attributes') }} />
-    </div>
+    {# If dynamic addition is disabled we don't display the search input field #}
+    {% if form.vars.allow_search %}
+      <div class="search search-with-icon">
+        {%- set attr = search_attr|merge({
+          class: (search_attr.class|default('') ~ ' entity-search-input form-control')|trim,
+          autocomplete: 'off',
+          placeholder: placeholder,
+          type: 'text',
+        }) -%}
+        {%- set id = form.vars.id ~ '_search_input' -%}
+        <input {{ block('widget_container_attributes') }} />
+      </div>
+    {% endif %}
     {{- block('form_help') -}}
+
     {%- set id = form.vars.id ~ '_list' -%}
     {% if list_layout == 'table' %}
       {{- block('entity_search_table_layout') -}}
@@ -66,28 +54,32 @@
 {% endblock %}
 
 {% block entity_search_list_layout %}
-  {%- set attr = list_attr|merge({'class': (list_attr.class|default('') ~ ' entities-list entities-list-container')|trim }) -%}
+  {%- set attr = list_attr|merge({class: (list_attr.class|default('') ~ ' entities-list entities-list-container')|trim}) -%}
   <ul {{ block('widget_container_attributes') }}>
     {{- block('form_rows') -}}
   </ul>
 {% endblock %}
 
 {% block entity_search_table_layout %}
-  {%- set attr = list_attr|merge({'class': (list_attr.class|default('') ~ ' entities-list-container')|trim }) -%}
-  <div {{ block('widget_attributes') }}>
+  {%- set attr = list_attr|merge({class: (list_attr.class|default('') ~ ' entities-list-container')|trim}) -%}
+  <div {{ block('widget_container_attributes') }}>
     <div class="row">
       <div class="col-sm">
         <table class="table">
           <thead class="thead-default">
-          <tr>
-          {% for child in prototype.children %}
-            {% set childType = child.vars.block_prefixes.1 %}
-            {% if childType != 'hidden' %}
-              <th>{{ child.vars.label }}</th>
+            <tr>
+            {% for child in prototype.children %}
+              {% set childType = child.vars.block_prefixes.1 %}
+              {% if childType != 'hidden' %}
+                <th>{{ child.vars.label }}</th>
+              {% endif %}
+            {% endfor %}
+
+            {# If item deletion is disabled we don't display the extra column for actions #}
+            {% if form.vars.allow_delete %}
+              <th></th>
             {% endif %}
-          {% endfor %}
-            <th></th>
-          </tr>
+            </tr>
           </thead>
           <tbody class="entities-list">
           {{- block('form_rows') -}}
@@ -107,23 +99,25 @@
 {% endblock %}
 
 {% block entity_item_list_row %}
-  <li class="media entity-item" id="{{ form.vars.name }}">
+  {% set attr = attr|merge({class: (attr.class|default('') ~ ' media entity-item')|trim}) %}
+  <li {{ block('widget_container_attributes') }}>
     <div class="media-left">
       {{ form_widget(form.image) }}
     </div>
     <div class="media-body media-middle">
       {{ form_widget(form.name) }}
-      <i class="material-icons delete entity-item-delete">clear</i>
+      <i class="material-icons entity-item-delete">clear</i>
     </div>
-    {{ form_widget(form.id) }}
+    {{ form_rest(form) }}
   </li>
 {% endblock %}
 
 {%- block entity_item_table_row -%}
-  <tr class="entity-item" id="{{ form.vars.name }}">
+  {% set attr = attr|merge({class: (attr.class|default('') ~ ' entity-item')|trim}) %}
+  <tr {{ block('widget_container_attributes') }}>
   {% for child in form.children %}
     {% set childType = child.vars.block_prefixes.1 %}
-    {% if childType == 'hidden'%}
+    {% if childType == 'hidden' %}
       {{ form_widget(child) }}
     {% else %}
     <td>
@@ -131,8 +125,31 @@
     </td>
     {% endif %}
   {% endfor %}
+
+  {# If item deletion is disabled we don't display the extra column for actions #}
+  {% if form.parent.vars.allow_delete %}
     <td>
-      <i class="material-icons delete entity-item-delete">clear</i>
+      <i class="material-icons entity-item-delete">clear</i>
     </td>
+  {% endif %}
   </tr>
 {%- endblock -%}
+
+{% block searched_customer_row %}
+  {%- set attr = attr|merge({
+    class: (attr.class|default('') ~ ' media entity-item')|trim,
+    'data-customer-active': form.active.vars.value,
+    'data-customer-guest': form.is_guest.vars.value,
+  }) -%}
+  <li {{ block('widget_container_attributes') }}>
+    <span class="customer-guest-badge badge badge-pill badge-secondary">{{ 'Guest'|trans({}, 'Admin.Shopparameters.Feature') }}</span>
+    <div class="media-body media-middle">
+      {{ form_widget(form.fullname_and_email) }}
+    </div>
+    <span class="customer-disabled-badge badge badge-pill badge-secondary">{{ 'Disabled'|trans({}, 'Admin.Global') }}</span>
+    <i class="material-icons entity-item-delete">clear</i>
+    {{ form_widget(form.id_customer) }}
+    {{ form_widget(form.active) }}
+    {{ form_widget(form.is_guest) }}
+  </li>
+{% endblock %}

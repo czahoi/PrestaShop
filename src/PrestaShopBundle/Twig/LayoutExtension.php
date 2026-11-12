@@ -1,36 +1,16 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShopBundle\Twig;
 
 use Currency;
 use Exception;
-use PrestaShop\PrestaShop\Adapter\Configuration;
 use PrestaShop\PrestaShop\Adapter\Currency\CurrencyDataProvider;
 use PrestaShop\PrestaShop\Adapter\LegacyContext;
+use PrestaShop\PrestaShop\Core\Domain\Configuration\ShopConfigurationInterface;
 use PrestaShop\PrestaShop\Core\Domain\Shop\ValueObject\ShopConstraint;
 use Twig\Extension\AbstractExtension;
 use Twig\Extension\GlobalsInterface;
@@ -42,38 +22,20 @@ use Twig\TwigFunction;
  */
 class LayoutExtension extends AbstractExtension implements GlobalsInterface
 {
-    /** @var LegacyContext */
-    private $context;
-
-    /** @var string */
-    private $environment;
-
-    /** @var Configuration */
-    private $configuration;
-
-    /** @var CurrencyDataProvider */
-    private $currencyDataProvider;
-
     /**
      * Constructor.
      *
      * Keeps the Context to look inside language settings.
      *
      * @param LegacyContext $context
-     * @param string $environment
-     * @param Configuration $configuration
+     * @param ShopConfigurationInterface $configuration
      * @param CurrencyDataProvider $currencyDataProvider
      */
     public function __construct(
-        LegacyContext $context,
-        $environment,
-        Configuration $configuration,
-        CurrencyDataProvider $currencyDataProvider
+        private readonly LegacyContext $context,
+        private readonly ShopConfigurationInterface $configuration,
+        private readonly CurrencyDataProvider $currencyDataProvider
     ) {
-        $this->context = $context;
-        $this->environment = $environment;
-        $this->configuration = $configuration;
-        $this->currencyDataProvider = $currencyDataProvider;
     }
 
     /**
@@ -90,12 +52,12 @@ class LayoutExtension extends AbstractExtension implements GlobalsInterface
 
         try {
             $defaultCurrency = $this->context->getEmployeeCurrency() ?: $this->currencyDataProvider->getDefaultCurrency();
-        } catch (\Exception $e) {
+        } catch (Exception) {
             $defaultCurrency = null;
         }
         try {
             $rootUrl = $this->context->getRootUrl();
-        } catch (\Exception $e) {
+        } catch (Exception) {
             $rootUrl = null;
         }
 
@@ -105,6 +67,7 @@ class LayoutExtension extends AbstractExtension implements GlobalsInterface
             'default_currency_symbol' => $defaultCurrency instanceof Currency ? $defaultCurrency->getSymbol() : null,
             'root_url' => $rootUrl,
             'js_translatable' => [],
+            'rtl_suffix' => $this->context->getContext()->language->is_rtl ? '_rtl' : '',
         ];
     }
 
@@ -128,7 +91,6 @@ class LayoutExtension extends AbstractExtension implements GlobalsInterface
     public function getFunctions()
     {
         return [
-            new TwigFunction('getLegacyLayout', [$this, 'getLegacyLayout']),
             new TwigFunction('getAdminLink', [$this, 'getAdminLink']),
             new TwigFunction('youtube_link', [$this, 'getYoutubeLink']),
             new TwigFunction('configuration', [$this, 'getConfiguration']),
@@ -144,104 +106,9 @@ class LayoutExtension extends AbstractExtension implements GlobalsInterface
      *
      * @return mixed
      */
-    public function getConfiguration($key, $default = null, ShopConstraint $shopConstraint = null)
+    public function getConfiguration($key, $default = null, ?ShopConstraint $shopConstraint = null)
     {
         return $this->configuration->get($key, $default, $shopConstraint);
-    }
-
-    /**
-     * Get admin legacy layout into old controller context.
-     *
-     * Parameters can be set manually into twig template or sent from controller
-     * For details : check Resources/views/Admin/Layout.html.twig
-     *
-     * @param string $controllerName The legacy controller name
-     * @param string $title The page title to override default one
-     * @param array $headerToolbarBtn The header toolbar to override
-     * @param string $displayType The legacy display type variable
-     * @param bool $showContentHeader Can force header toolbar (buttons and title) to be hidden with false value
-     * @param array|string $headerTabContent Tabs labels
-     * @param bool $enableSidebar Allow to use right sidebar to display docs for instance
-     * @param string $helpLink If specified, will be used instead of legacy one
-     * @param string[] $jsRouterMetadata JS Router needed configuration settings: base_url and security token
-     * @param string $metaTitle
-     * @param bool $useRegularH1Structure allows complex <h1> structure if set to false
-     *
-     * @throws Exception if legacy layout has no $content var replacement
-     *
-     * @return string The html layout
-     */
-    public function getLegacyLayout(
-        $controllerName = '',
-        $title = '',
-        $headerToolbarBtn = [],
-        $displayType = '',
-        $showContentHeader = true,
-        $headerTabContent = '',
-        $enableSidebar = false,
-        $helpLink = '',
-        $jsRouterMetadata = [],
-        $metaTitle = '',
-        $useRegularH1Structure = true
-    ) {
-        if ($this->environment == 'test') {
-            return <<<'EOF'
-<html>
-  <head>
-    <title>Test layout</title>
-    {% block stylesheets %}{% endblock %}{% block extra_stylesheets %}{% endblock %}
-  </head>
-  <body>
-    {% block content_header %}{% endblock %}
-    {% block content %}{% endblock %}
-    {% block content_footer %}{% endblock %}
-    {% block javascripts %}{% endblock %}
-    {% block extra_javascripts %}{% endblock %}
-    {% block translate_javascripts %}{% endblock %}
-  </body>
-</html>
-EOF;
-        }
-
-        $layout = $this->context->getLegacyLayout(
-            $controllerName,
-            $title,
-            $headerToolbarBtn,
-            $displayType,
-            $showContentHeader,
-            $headerTabContent,
-            $enableSidebar,
-            $helpLink,
-            $jsRouterMetadata,
-            $metaTitle,
-            $useRegularH1Structure
-        );
-
-        //test if legacy template from "content.tpl" has '{$content}'
-        if (false === strpos($layout, '{$content}')) {
-            throw new Exception('PrestaShopBundle\Twig\LayoutExtension cannot find the {$content} string in legacy layout template', 1);
-        }
-
-        $content = str_replace(
-            [
-                '{$content}',
-                'var currentIndex = \'index.php\';',
-                '</head>',
-                '</body>',
-            ],
-            [
-                '{% block content_header %}{% endblock %}
-                 {% block content %}{% endblock %}
-                 {% block content_footer %}{% endblock %}
-                 {% block sidebar_right %}{% endblock %}',
-                'var currentIndex = \'' . $this->context->getAdminLink($controllerName) . '\';',
-                '{% block stylesheets %}{% endblock %}{% block extra_stylesheets %}{% endblock %}</head>',
-                '{% block javascripts %}{% endblock %}{% block extra_javascripts %}{% endblock %}{% block translate_javascripts %}{% endblock %}</body>',
-            ],
-            $layout
-        );
-
-        return $content;
     }
 
     /**

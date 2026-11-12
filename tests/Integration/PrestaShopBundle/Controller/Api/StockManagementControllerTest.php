@@ -1,35 +1,17 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
 
 namespace Tests\Integration\PrestaShopBundle\Controller\Api;
 
+use Cache;
 use Doctrine\DBAL\Connection;
 use PrestaShopBundle\Api\QueryStockParamsCollection;
+use Tests\Resources\DatabaseDump;
 
 class StockManagementControllerTest extends ApiTestCase
 {
@@ -37,6 +19,28 @@ class StockManagementControllerTest extends ApiTestCase
      * @var Connection
      */
     private $connection;
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        static::restoreDatabase();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        parent::tearDownAfterClass();
+        static::restoreDatabase();
+    }
+
+    protected static function restoreDatabase(): void
+    {
+        DatabaseDump::restoreTables([
+            'product',
+            'product_attribute',
+            'stock_available',
+            'stock_mvt',
+        ]);
+    }
 
     protected function setUp(): void
     {
@@ -49,30 +53,15 @@ class StockManagementControllerTest extends ApiTestCase
             ->getMock();
 
         $stockMovementRepository->method('saveStockMvt')->willReturn(true);
-        self::$container->set('prestashop.core.api.stock_movement.repository', $stockMovementRepository);
+        self::getContainer()->set('prestashop.core.api.stock_movement.repository', $stockMovementRepository);
 
         $this->restoreQuantityEditionFixtures();
     }
 
-    private function restoreMovements(): void
-    {
-        $deleteMovements = sprintf('DELETE FROM %sstock_mvt', _DB_PREFIX_);
-        $statement = $this->connection->prepare($deleteMovements);
-        $statement->executeStatement();
-    }
-
-    private function restoreQuantityEditionFixtures(): void
-    {
-        $updateProductQuantity = sprintf(
-            'UPDATE %sstock_available SET quantity = 8, physical_quantity = 10, reserved_quantity = 2 WHERE id_product = 1 AND id_product_attribute = 1',
-            _DB_PREFIX_
-        );
-        $statement = $this->connection->prepare($updateProductQuantity);
-        $statement->executeStatement();
-    }
-
     public function testItShouldReturnBadRequestResponseOnInvalidPaginationParams(): void
     {
+        self::$client->disableReboot();
+
         $routes = [
             $this->router->generate('api_stock_list_products', []),
             $this->router->generate('api_stock_list_movements', []),
@@ -104,27 +93,27 @@ class StockManagementControllerTest extends ApiTestCase
         return [
             [
                 [],
-                $expectedTotalPages = 1,
+                1,
             ],
             [
                 ['page_index' => 1, 'page_size' => 2],
-                $expectedTotalPages = 24,
+                24,
             ],
             [
                 ['supplier_id' => 1, 'page_index' => 2, 'page_size' => 2],
-                $expectedTotalPages = 0,
+                0,
             ],
             [
                 ['supplier_id' => [1, 2], 'page_index' => 2, 'page_size' => 2],
-                $expectedTotalPages = 0,
+                0,
             ],
             [
                 ['category_id' => 5, 'page_index' => 1, 'page_size' => 1],
-                $expectedTotalPages = 4,
+                4,
             ],
             [
                 ['category_id' => [4, 5], 'page_index' => 1, 'page_size' => 1],
-                $expectedTotalPages = 12,
+                12,
             ],
         ];
     }
@@ -132,8 +121,8 @@ class StockManagementControllerTest extends ApiTestCase
     /**
      * @dataProvider getProductsCombinationsParams
      *
-     * @param $params
-     * @param $expectedTotalPages
+     * @param array $params
+     * @param int $expectedTotalPages
      */
     public function testItShouldReturnOkResponseWhenRequestingProductsCombinationsStock(array $params, int $expectedTotalPages): void
     {
@@ -148,15 +137,15 @@ class StockManagementControllerTest extends ApiTestCase
         return [
             [
                 ['productId' => 1],
-                $expectedTotalPages = 1,
+                1,
             ],
             [
                 ['productId' => 7, 'page_index' => 1, 'page_size' => 2],
-                $expectedTotalPages = 1,
+                1,
             ],
             [
                 ['productId' => 1, 'category_id' => [4, 5], 'page_index' => 1, 'page_size' => 1],
-                $expectedTotalPages = 8,
+                8,
             ],
         ];
     }
@@ -169,7 +158,7 @@ class StockManagementControllerTest extends ApiTestCase
     private function assertOkResponseOnList(
         string $routeName,
         array $parameters = [],
-        int $expectedTotalPages = null
+        ?int $expectedTotalPages = null
     ): void {
         $route = $this->router->generate($routeName, $parameters);
         self::$client->request('GET', $route);
@@ -188,10 +177,6 @@ class StockManagementControllerTest extends ApiTestCase
      */
     private function assertResponseHasTotalPages(array $parameters, int $expectedTotalPages): void
     {
-        if (null === $expectedTotalPages) {
-            return;
-        }
-
         $QueryStockParamsCollection = new QueryStockParamsCollection();
         $pageSize = $QueryStockParamsCollection->getDefaultPageSize();
         if (array_key_exists('page_size', $parameters)) {
@@ -358,16 +343,28 @@ class StockManagementControllerTest extends ApiTestCase
         $bulkEditProductsRoute = $this->router->generate('api_stock_bulk_edit_products');
 
         self::$client->request('POST', $bulkEditProductsRoute);
-        $this->assertResponseBodyValidJson(400);
+        $content = $this->assertResponseBodyValidJson(400);
+        $this->assertEquals([
+            'error' => 'Invalid JSON content (The request body should contain a JSON-encoded array of product identifiers and deltas)',
+        ], $content);
 
         self::$client->request('POST', $bulkEditProductsRoute, [], [], [], '[{"combination_id": 0}]');
-        $this->assertResponseBodyValidJson(400);
+        $content = $this->assertResponseBodyValidJson(400);
+        $this->assertEquals([
+            'error' => 'Each item of JSON-encoded array in the request body should contain a product id ("product_id"), a quantity delta ("delta"). The item of index #0 is invalid.',
+        ], $content);
 
         self::$client->request('POST', $bulkEditProductsRoute, [], [], [], '[{"product_id": 1}]');
-        $this->assertResponseBodyValidJson(400);
+        $content = $this->assertResponseBodyValidJson(400);
+        $this->assertEquals([
+            'error' => 'Each item of JSON-encoded array in the request body should contain a product id ("product_id"), a quantity delta ("delta"). The item of index #0 is invalid.',
+        ], $content);
 
         self::$client->request('POST', $bulkEditProductsRoute, [], [], [], '[{"delta": 0}]');
-        $this->assertResponseBodyValidJson(400);
+        $content = $this->assertResponseBodyValidJson(400);
+        $this->assertEquals([
+            'error' => 'Each item of JSON-encoded array in the request body should contain a product id ("product_id"), a quantity delta ("delta"). The item of index #0 is invalid.',
+        ], $content);
 
         self::$client->request(
             'POST',
@@ -377,7 +374,10 @@ class StockManagementControllerTest extends ApiTestCase
             [],
             '[{"product_id": 1, "delta": 0}]'
         );
-        $this->assertResponseBodyValidJson(400);
+        $content = $this->assertResponseBodyValidJson(400);
+        $this->assertEquals([
+            'error' => 'Value cannot be 0.',
+        ], $content);
     }
 
     private function assertOkResponseOnBulkEditProducts(): void
@@ -485,15 +485,15 @@ class StockManagementControllerTest extends ApiTestCase
             // @TODO when entity manager can save movements in db
             //            array(
             //                array(),
-            //                $expectedTotalPages = 1
+            //                1
             //            ),
             //            array(
             //                array('page_index' => 1, 'page_size' => 5),
-            //                $expectedTotalPages = 2
+            //                2
             //            )
             [
                 ['page_index' => 1],
-                $expectedTotalPages = 0,
+                0,
             ],
         ];
     }
@@ -506,5 +506,24 @@ class StockManagementControllerTest extends ApiTestCase
     public function testItShouldReturnOkResponseWhenRequestingMovementsEmployees(): void
     {
         $this->assertOkResponseOnList('api_stock_list_movements_employees');
+    }
+
+    private function restoreMovements(): void
+    {
+        $deleteMovements = sprintf('DELETE FROM %sstock_mvt', _DB_PREFIX_);
+        $statement = $this->connection->prepare($deleteMovements);
+        $statement->executeStatement();
+    }
+
+    private function restoreQuantityEditionFixtures(): void
+    {
+        $updateProductQuantity = sprintf(
+            'UPDATE %sstock_available SET quantity = 8, physical_quantity = 10, reserved_quantity = 2 WHERE id_product = 1 AND id_product_attribute = 1',
+            _DB_PREFIX_
+        );
+        $statement = $this->connection->prepare($updateProductQuantity);
+        $statement->executeStatement();
+        // Clear cache for entity manager to fetch the new updated values
+        Cache::clean('objectmodel_StockAvailable_*');
     }
 }

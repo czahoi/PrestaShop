@@ -1,37 +1,26 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import {Grid} from '@PSTypes/grid';
 import GridMap from '@components/grid/grid-map';
+import {isUndefined} from '@components/typeguard';
 
 const {$} = window;
+
+type OnClickCallbackFunction = (button: HTMLElement) => void;
 
 /**
  * Class LinkRowActionExtension handles link row actions
  */
 export default class LinkRowActionExtension {
+  private readonly onClick?: OnClickCallbackFunction | undefined;
+
+  constructor(onClick:OnClickCallbackFunction | undefined = undefined) {
+    this.onClick = onClick;
+  }
+
   /**
    * Extend grid
    *
@@ -63,6 +52,8 @@ export default class LinkRowActionExtension {
    * @param {Grid} grid
    */
   initRowLinks(grid: Grid): void {
+    const onClickCallback = this.onClick;
+
     $('tr', grid.getContainer()).each(function initEachRow() {
       const $parentRow = $(this);
 
@@ -75,26 +66,36 @@ export default class LinkRowActionExtension {
             $parentCell,
           );
           let isDragging = false;
-          clickableCells.addClass('cursor-pointer').mousedown(() => {
-            $(window).mousemove(() => {
+          let isPressed = false;
+          clickableCells.addClass('cursor-pointer').on('mousedown', () => {
+            isPressed = true;
+            $(window).one('mousemove.linkRowAction', () => {
               isDragging = true;
-              $(window).unbind('mousemove');
+            });
+            // Reset the state wherever the press is released, not only over a clickable cell, so the
+            // next click is not ignored; it runs after the cell's mouseup, which still needs the state
+            $(document).one('mouseup.linkRowAction', () => {
+              $(window).off('mousemove.linkRowAction');
+              isDragging = false;
+              isPressed = false;
             });
           });
 
-          clickableCells.mouseup(() => {
-            const wasDragging = isDragging;
-            isDragging = false;
-            $(window).unbind('mousemove');
-
-            if (!wasDragging) {
+          clickableCells.on('mouseup', () => {
+            // A click needs the press to start on a clickable cell: a position drag starts on the
+            // handle, so releasing it over a clickable cell must not open the link
+            if (isPressed && !isDragging) {
               const confirmMessage = $rowAction.data('confirm-message');
 
               if (
                 !confirmMessage.length
                 || (window.confirm(confirmMessage) && $rowAction.attr('href'))
               ) {
-                document.location.href = <string>$rowAction.attr('href');
+                if (!isUndefined(onClickCallback) && !isUndefined($rowAction.get(0))) {
+                  onClickCallback($rowAction.get(0) as HTMLElement);
+                } else {
+                  document.location.href = <string>$rowAction.attr('href');
+                }
               }
             }
           });

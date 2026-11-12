@@ -1,33 +1,14 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace PrestaShop\PrestaShop\Adapter\CatalogPriceRule\CommandHandler;
 
 use DateTime;
 use PrestaShop\PrestaShop\Adapter\CatalogPriceRule\AbstractCatalogPriceRuleHandler;
+use PrestaShop\PrestaShop\Core\CommandBus\Attributes\AsCommandHandler;
 use PrestaShop\PrestaShop\Core\Domain\CatalogPriceRule\Command\EditCatalogPriceRuleCommand;
 use PrestaShop\PrestaShop\Core\Domain\CatalogPriceRule\CommandHandler\EditCatalogPriceRuleHandlerInterface;
 use PrestaShop\PrestaShop\Core\Domain\CatalogPriceRule\Exception\CannotUpdateCatalogPriceRuleException;
@@ -40,6 +21,7 @@ use SpecificPriceRule;
 /**
  * Handles command which edits catalog price rule handler using legacy object model
  */
+#[AsCommandHandler]
 final class EditCatalogPriceRuleHandler extends AbstractCatalogPriceRuleHandler implements EditCatalogPriceRuleHandlerInterface
 {
     /**
@@ -124,29 +106,20 @@ final class EditCatalogPriceRuleHandler extends AbstractCatalogPriceRuleHandler 
         $commandDateFrom = $command->getDateTimeFrom();
         $commandDateTo = $command->getDateTimeTo();
 
-        $modelDateFrom = $specificPriceRule->from;
-        $modelDateTo = $specificPriceRule->to;
-
-        //if `date from` value is being updated
-        if (null !== $commandDateFrom) {
-            //and if `date to` is set in database
-            if (!UtilsDateTime::isNull($modelDateTo)) {
-                //asserts that range between these values is not inverse
-                $this->assertDateRangeIsNotInverse($commandDateFrom, new DateTime($modelDateTo));
-            }
-
-            $specificPriceRule->from = $commandDateFrom->format('Y-m-d H:i:s');
+        // range is left untouched, the stored values are not checked
+        if (null === $commandDateFrom && null === $commandDateTo) {
+            return;
         }
 
-        //if `date to` value is being updated
-        if (null !== $commandDateTo) {
-            //and if `date from` is set in database
-            if (UtilsDateTime::isNull($modelDateFrom)) {
-                //asserts that range between these values is not inverse
-                $this->assertDateRangeIsNotInverse(new DateTime($modelDateFrom), $commandDateTo);
-            }
+        // resulting range: updated value when provided by the command, stored value otherwise
+        $dateFrom = null !== $commandDateFrom ? $commandDateFrom->format('Y-m-d H:i:s') : $specificPriceRule->from;
+        $dateTo = null !== $commandDateTo ? $commandDateTo->format('Y-m-d H:i:s') : $specificPriceRule->to;
 
-            $specificPriceRule->to = $commandDateTo->format('Y-m-d H:i:s');
+        if (!UtilsDateTime::isNull($dateFrom) && !UtilsDateTime::isNull($dateTo)) {
+            $this->assertDateRangeIsNotInverse(new DateTime($dateFrom), new DateTime($dateTo));
         }
+
+        $specificPriceRule->from = $dateFrom;
+        $specificPriceRule->to = $dateTo;
     }
 }

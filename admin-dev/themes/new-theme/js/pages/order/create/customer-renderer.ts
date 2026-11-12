@@ -1,26 +1,6 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import createOrderMap from '@pages/order/create/create-order-map';
@@ -29,6 +9,24 @@ import eventMap from '@pages/order/create/event-map';
 import {EventEmitter} from '@components/event-emitter';
 
 const {$} = window;
+
+/* eslint-disable camelcase */
+export interface CustomerGroup {
+  id_group: string;
+  name: string;
+  default: boolean;
+}
+
+export interface CustomerResult {
+  [key: number]: any;
+  firstname: string,
+  lastname: string,
+  email: string,
+  groups: Record<number, CustomerGroup>;
+  birthday: string;
+  company: string;
+}
+/* eslint-disable camelcase */
 
 /**
  * Responsible for customer information rendering
@@ -53,8 +51,8 @@ export default class CustomerRenderer {
    *
    * @param foundCustomers
    */
-  renderSearchResults(foundCustomers: Record<string, any>): void {
-    if (foundCustomers.length === 0) {
+  renderSearchResults(foundCustomers: Record<number, CustomerResult>): void {
+    if (Object.entries(foundCustomers).length === 0) {
       EventEmitter.emit(eventMap.customersNotFound);
 
       return;
@@ -66,11 +64,29 @@ export default class CustomerRenderer {
         firstName: customerResult.firstname,
         lastName: customerResult.lastname,
         email: customerResult.email,
+        groups: '',
         birthday:
           customerResult.birthday !== '0000-00-00'
             ? customerResult.birthday
             : ' ',
+        company: customerResult.company,
       };
+
+      if (Object.keys(customerResult.groups).length > 1) {
+        const output: string[] = [];
+
+        Object.values(customerResult.groups).forEach((customerGroup) => {
+          if (customerGroup.default === true) {
+            output.push(`${customerGroup.name} (${window.translate_javascripts['Customer search - group default']})`);
+          } else {
+            output.push(customerGroup.name);
+          }
+        });
+        customer.groups = `${window.translate_javascripts['Customer search - group label multiple']}: ${output.join(', ')}`;
+      } else if (Object.keys(customerResult.groups).length > 0) {
+        // eslint-disable-next-line
+        customer.groups = `${window.translate_javascripts['Customer search - group label single']}: ${Object.values(customerResult.groups)[0].name}`;
+      }
 
       this.renderFoundCustomer(customer);
     });
@@ -346,9 +362,13 @@ export default class CustomerRenderer {
       .find(createOrderMap.customerSearchResultEmail)
       .text(customer.email);
     $template.find(createOrderMap.customerSearchResultId).text(customer.id);
+    $template.find(createOrderMap.customerSearchResultGroups).text(customer.groups);
     $template
       .find(createOrderMap.customerSearchResultBirthday)
       .text(customer.birthday);
+    $template
+      .find(createOrderMap.customerSearchResultCompany)
+      .text(customer.company);
     $template
       .find(createOrderMap.chooseCustomerBtn)
       .data('customer-id', customer.id);

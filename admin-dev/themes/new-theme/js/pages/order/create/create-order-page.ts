@@ -1,26 +1,6 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import Router from '@components/router';
@@ -32,7 +12,7 @@ import ShippingRenderer from './shipping-renderer';
 import CartProvider from './cart-provider';
 import AddressesRenderer from './addresses-renderer';
 import CartRulesRenderer from './cart-rules-renderer';
-import CartEditor from './cart-editor';
+import CartEditor, {CartProduct} from './cart-editor';
 import eventMap from './event-map';
 import CartRuleManager from './cart-rule-manager';
 import ProductManager from './product-manager';
@@ -42,6 +22,78 @@ import SummaryManager from './summary-manager';
 import {ValidateAddresses} from './address-validator';
 
 const {$} = window;
+
+export interface CartAddress {
+  addressId: number;
+  alias: string;
+  delivery: boolean;
+  formattedAddress: string;
+}
+
+export interface CartInfo {
+  addresses: Array<CartAddress>;
+  cartId: number;
+  cartRules: any;
+  currencyId: number;
+  langId: number;
+  products: Array<CartInfoProduct>;
+  shipping: CartShipping;
+  summary: CartSummary;
+}
+
+export interface CartInfoProduct {
+  attribute: string;
+  attributeId: number;
+  availableOutOfStock: boolean;
+  availableStock: number;
+  customization: Array<CustomizationField>;
+  gift: boolean
+  imageLink: string;
+  name: string;
+  price: string;
+  productId: number;
+  quantity: number;
+  reference: string;
+  unitPrice: string;
+}
+
+export interface CartShipping {
+  deliveryOptions: Array<CartDeliveryOptions>;
+  freeShipping: boolean;
+  gift: boolean;
+  giftMessage: string;
+  recycledPackaging: boolean;
+  selectedCarrierId: number | null | string;
+  virtual: boolean;
+}
+
+export interface CartSummary {
+  orderMessage: string;
+  processOrderLink: string;
+  totalDiscount: string;
+  totalPriceWithTaxes: string;
+  totalPriceWithoutTaxes: string;
+  totalProductsPrice: string;
+  totalShippingPrice: string;
+  totalShippingWithoutTaxes: string;
+}
+
+export interface CartDeliveryOptions {
+  carrierId: number;
+  carrierName: string;
+  carrierDelay: string;
+}
+
+export interface CartCustomization {
+  customizationId: number;
+  customizationFieldsData: Array<CustomizationField>;
+}
+
+export interface CustomizationField {
+  type: number;
+  name: string;
+  value: string;
+}
 
 /**
  * Page Object for "Create order" page
@@ -412,7 +464,7 @@ export default class CreateOrderPage {
    * @private
    */
   private onCartLanguageChanged() {
-    EventEmitter.on(eventMap.cartLanguageChanged, (cartInfo) => {
+    EventEmitter.on(eventMap.cartLanguageChanged, (cartInfo: CartInfo) => {
       this.preselectCartLanguage(cartInfo.langId);
       this.renderCartInfo(cartInfo);
     });
@@ -425,7 +477,7 @@ export default class CreateOrderPage {
    */
   private onCartCurrencyChanged() {
     // on success
-    EventEmitter.on(eventMap.cartCurrencyChanged, (cartInfo) => {
+    EventEmitter.on(eventMap.cartCurrencyChanged, (cartInfo: CartInfo) => {
       this.renderCartInfo(cartInfo);
       this.productRenderer.reset();
     });
@@ -588,11 +640,11 @@ export default class CreateOrderPage {
    * @private
    */
   private initProductChangePrice(event: JQueryEventObject) {
-    const product = {
+    const product: CartProduct = {
       productId: $(event.currentTarget).data('product-id'),
       attributeId: $(event.currentTarget).data('attribute-id'),
       customizationId: $(event.currentTarget).data('customization-id'),
-      price: $(event.currentTarget).val(),
+      price: <string>$(event.currentTarget).val(),
     };
     this.productManager.changeProductPrice(
       <number> this.cartId,
@@ -609,11 +661,11 @@ export default class CreateOrderPage {
    * @private
    */
   private initProductChangeQty(event: JQueryEventObject) {
-    const product = {
+    const product: CartProduct = {
       productId: $(event.currentTarget).data('product-id'),
       attributeId: $(event.currentTarget).data('attribute-id'),
       customizationId: $(event.currentTarget).data('customization-id'),
-      newQty: $(event.currentTarget).val(),
+      newQty: <string>$(event.currentTarget).val(),
       prevQty: $(event.currentTarget).data('prev-qty'),
     };
 
@@ -643,7 +695,7 @@ export default class CreateOrderPage {
    *
    * @private
    */
-  private renderCartInfo(cartInfo: Record<string, any>): void {
+  private renderCartInfo(cartInfo: CartInfo): void {
     this.addressesRenderer.render(cartInfo.addresses, cartInfo.cartId);
     this.cartRulesRenderer.renderCartRulesBlock(
       cartInfo.cartRules,
@@ -661,6 +713,9 @@ export default class CreateOrderPage {
 
     $(createOrderMap.cartBlock).removeClass('d-none');
     $(createOrderMap.cartBlock).data('cartId', cartInfo.cartId);
+    if (cartInfo.shipping?.virtual) {
+      $(createOrderMap.shippingBlock).addClass('d-none');
+    }
   }
 
   /**
@@ -670,7 +725,7 @@ export default class CreateOrderPage {
    *
    * @private
    */
-  private preselectCartCurrency(currencyId: string) {
+  private preselectCartCurrency(currencyId: number) {
     $(createOrderMap.cartCurrencySelect).val(currencyId);
   }
 
@@ -681,7 +736,7 @@ export default class CreateOrderPage {
    *
    * @private
    */
-  private preselectCartLanguage(langId: string) {
+  private preselectCartLanguage(langId: number) {
     $(createOrderMap.cartLanguageSelect).val(langId);
   }
 
@@ -692,8 +747,8 @@ export default class CreateOrderPage {
    */
   private changeCartAddresses() {
     const addresses = {
-      deliveryAddressId: $(createOrderMap.deliveryAddressSelect).val(),
-      invoiceAddressId: $(createOrderMap.invoiceAddressSelect).val(),
+      deliveryAddressId: <string>$(createOrderMap.deliveryAddressSelect).val(),
+      invoiceAddressId: <string>$(createOrderMap.invoiceAddressSelect).val(),
     };
 
     this.cartEditor.changeCartAddresses(<number> this.cartId, addresses);

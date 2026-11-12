@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 use PrestaShopBundle\Install\Database;
@@ -37,16 +17,69 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
      */
     public $model_database;
 
-    public function init()
+    /**
+     * @var string
+     */
+    public $database_server;
+
+    /**
+     * @var string
+     */
+    public $database_name;
+
+    /**
+     * @var string
+     */
+    public $database_login;
+
+    /**
+     * @var string
+     */
+    public $database_password;
+
+    /**
+     * @var string
+     */
+    public $database_engine;
+
+    /**
+     * @var string
+     */
+    public $database_prefix;
+
+    /**
+     * @var bool
+     */
+    public $database_clear;
+
+    /**
+     * @var bool
+     */
+    public $use_smtp;
+
+    /**
+     * @var string
+     */
+    public $smtp_encryption;
+
+    /**
+     * @var int
+     */
+    public $smtp_port;
+
+    /**
+     * {@inheritdoc}
+     */
+    public function init(): void
     {
         $this->model_database = new Database();
         $this->model_database->setTranslator($this->translator);
     }
 
     /**
-     * @see HttpConfigureInterface::processNextStep()
+     * {@inheritdoc}
      */
-    public function processNextStep()
+    public function processNextStep(): void
     {
         // Save database config
         $this->session->database_server = trim(Tools::getValue('dbServer'));
@@ -59,11 +92,9 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
     }
 
     /**
-     * Database configuration must be valid to validate this step
-     *
-     * @see HttpConfigureInterface::validate()
+     * {@inheritdoc}
      */
-    public function validate()
+    public function validate(): bool
     {
         $this->errors = $this->model_database->testDatabaseSettings(
             $this->session->database_server,
@@ -85,7 +116,10 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
         return true;
     }
 
-    public function process()
+    /**
+     * {@inheritdoc}
+     */
+    public function process(): void
     {
         if (Tools::getValue('checkDb')) {
             $this->processCheckDb();
@@ -97,7 +131,7 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
     /**
      * Check if a connection to database is possible with these data
      */
-    public function processCheckDb()
+    public function processCheckDb(): void
     {
         $server = Tools::getValue('dbServer');
         $database = Tools::getValue('dbName');
@@ -117,7 +151,7 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
     /**
      * Attempt to create the database
      */
-    public function processCreateDb()
+    public function processCreateDb(): void
     {
         $server = Tools::getValue('dbServer');
         $database = Tools::getValue('dbName');
@@ -133,9 +167,9 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
     }
 
     /**
-     * @see HttpConfigureInterface::display()
+     * {@inheritdoc}
      */
-    public function display()
+    public function display(): void
     {
         if (!$this->session->database_server) {
             if (file_exists(_PS_ROOT_DIR_ . '/app/config/parameters.php')) {
@@ -152,7 +186,7 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
             $this->database_login = $parameters['parameters']['database_user'];
             $this->database_password = $parameters['parameters']['database_password'];
             $this->database_engine = $parameters['parameters']['database_engine'];
-            $this->database_prefix = $parameters['parameters']['database_prefix'];
+            $this->database_prefix = substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyz', mt_rand(1,10))), 0, 5).'_';
 
             $this->database_clear = true;
             $this->use_smtp = false;
@@ -170,6 +204,11 @@ class InstallControllerHttpDatabase extends InstallControllerHttp implements Htt
             $this->use_smtp = $this->session->use_smtp;
             $this->smtp_encryption = $this->session->smtp_encryption;
             $this->smtp_port = $this->session->smtp_port;
+        }
+
+        $staticPrefix = defined('_PS_INSTALLER_STATIC_DB_PREFIX_') ? _PS_INSTALLER_STATIC_DB_PREFIX_ : null;
+        if (is_string($staticPrefix) && $staticPrefix !== '') {
+            $this->database_prefix = rtrim($staticPrefix, '_') . '_';
         }
 
         $this->displayContent('database');

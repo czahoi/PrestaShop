@@ -1,34 +1,43 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
+
+/**
+ * @property string $step
+ * @property string $language
+ * @property int $all_languages
+ * @property string $timezone
+ * @property string $base_uri
+ * @property string $http_host
+ * @property string $database_server
+ * @property string $database_login
+ * @property string $database_password
+ * @property string $database_name
+ * @property bool $database_clear
+ * @property int $database_create
+ * @property string $database_prefix
+ * @property string $database_engine
+ * @property string $shop_name
+ * @property string $shop_country
+ * @property string $admin_firstname
+ * @property string $admin_lastname
+ * @property string $admin_password
+ * @property string $admin_email
+ * @property int $show_license
+ * @property string $theme
+ * @property int $enable_ssl
+ * @property int $rewrite_engine
+ * @property string $fixtures
+ * @property array $xml_loader_ids
+ * @property string|array $modules
  */
 class Datas
 {
     private static $instance = null;
     protected static $available_args = [
         'step' => [
-            'name' => 'step',
             'default' => 'all',
             'validate' => 'isGenericName',
             'help' => 'all / database,fixtures,theme,modules,postInstall',
@@ -50,7 +59,6 @@ class Datas
             'alias' => 't',
         ],
         'base_uri' => [
-            'name' => 'base_uri',
             'validate' => 'isUrl',
             'default' => '/',
         ],
@@ -110,11 +118,6 @@ class Datas
             'validate' => 'isGenericName',
             'default' => 'PrestaShop',
         ],
-        'shop_activity' => [
-            'name' => 'activity',
-            'default' => 0,
-            'validate' => 'isInt',
-        ],
         'shop_country' => [
             'name' => 'country',
             'validate' => 'isLanguageIsoCode',
@@ -132,8 +135,8 @@ class Datas
         ],
         'admin_password' => [
             'name' => 'password',
-            'validate' => 'isPasswd',
-            'default' => '0123456789',
+            'validate' => 'isAcceptablePasswordLength',
+            'default' => 'Pr3st4Sh0P',
         ],
         'admin_email' => [
             'name' => 'email',
@@ -146,7 +149,6 @@ class Datas
             'help' => 'show PrestaShop license',
         ],
         'theme' => [
-            'name' => 'theme',
             'default' => '',
         ],
         'enable_ssl' => [
@@ -164,6 +166,10 @@ class Datas
             'default' => '1',
             'validate' => 'isInt',
             'help' => 'enable fixtures installation',
+        ],
+        'modules' => [
+            'default' => [],
+            'help' => 'Modules to install, separated by comma',
         ],
     ];
 
@@ -183,13 +189,16 @@ class Datas
         $this->datas[$key] = $value;
     }
 
+    /**
+     * @return Datas|null
+     */
     public static function getInstance()
     {
-        if (static::$instance === null) {
-            static::$instance = new static();
+        if (self::$instance === null) {
+            self::$instance = new static();
         }
 
-        return static::$instance;
+        return self::$instance;
     }
 
     public static function getArgs()
@@ -205,7 +214,7 @@ class Datas
 
         $args_ok = [];
         foreach ($argv as $arg) {
-            if (!preg_match('/^--([^=\'"><|`]+)(?:=([^=><|`]+)|(?!license))/i', trim($arg), $res)) {
+            if (!preg_match('/^--([^=\'"><|`]+)(?:=([^=|`]+)|(?!license))/i', trim($arg), $res)) {
                 continue;
             }
 
@@ -227,9 +236,10 @@ class Datas
             } else {
                 $name = $key;
             }
+
             if (!isset($args_ok[$name])) {
                 if (!isset($row['default'])) {
-                    $errors[] = 'Field ' . $row['name'] . ' is empty';
+                    $errors[] = 'Field ' . $name . ' is empty';
                 } else {
                     $this->$key = $row['default'];
                 }

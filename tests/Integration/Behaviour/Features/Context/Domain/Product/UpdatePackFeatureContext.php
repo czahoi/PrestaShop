@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -29,15 +9,15 @@ declare(strict_types=1);
 namespace Tests\Integration\Behaviour\Features\Context\Domain\Product;
 
 use Behat\Gherkin\Node\TableNode;
-use Pack;
 use PHPUnit\Framework\Assert;
-use PrestaShop\PrestaShop\Core\Domain\Product\Combination\ValueObject\CombinationId;
+use PrestaShop\PrestaShop\Core\Domain\Product\Combination\ValueObject\NoCombinationId;
 use PrestaShop\PrestaShop\Core\Domain\Product\Exception\ProductException;
 use PrestaShop\PrestaShop\Core\Domain\Product\Pack\Command\RemoveAllProductsFromPackCommand;
 use PrestaShop\PrestaShop\Core\Domain\Product\Pack\Command\SetPackProductsCommand;
 use PrestaShop\PrestaShop\Core\Domain\Product\Pack\Exception\ProductPackConstraintException;
 use PrestaShop\PrestaShop\Core\Domain\Product\Pack\Query\GetPackedProducts;
-use PrestaShop\PrestaShop\Core\Domain\Product\Pack\QueryResult\PackedProduct;
+use PrestaShop\PrestaShop\Core\Domain\Product\Pack\QueryResult\PackedProductDetails;
+use PrestaShop\PrestaShop\Core\Domain\Shop\ValueObject\ShopConstraint;
 use RuntimeException;
 
 class UpdatePackFeatureContext extends AbstractProductFeatureContext
@@ -90,89 +70,53 @@ class UpdatePackFeatureContext extends AbstractProductFeatureContext
      *
      * @param string $packReference
      */
-    public function assertPackEmpty(string $packReference): void
+    public function assertPackEmptyForDefaultShop(string $packReference): void
     {
-        $packId = $this->getSharedStorage()->get($packReference);
-
-        $packedProducts = $this->getQueryBus()->handle(new GetPackedProducts($packId));
-        Assert::assertEmpty($packedProducts);
-        Assert::assertFalse(Pack::isPack($packId));
+        $this->assertPackEmpty($packReference, ShopConstraint::shop($this->getDefaultShopId()));
     }
 
     /**
-     * @Then pack :packReference should contain products with following quantities:
+     * @When pack :packReference should be empty for shop(s) :shopReferences
+     *
+     * @param string $packReference
+     * @param string $shopReferences
+     */
+    public function assertPackEmptyForShops(string $packReference, string $shopReferences): void
+    {
+        foreach (explode(',', $shopReferences) as $shopReference) {
+            $this->assertPackEmpty($packReference, ShopConstraint::shop((int) $this->getSharedStorage()->get($shopReference)));
+        }
+    }
+
+    /**
+     * @Then pack :packReference should contain products with following details:
      *
      * @param string $packReference
      * @param TableNode $table
      */
-    public function assertPackContents(string $packReference, TableNode $table): void
+    public function assertPackContentsForDefaultShop(string $packReference, TableNode $table): void
     {
-        $data = $table->getColumnsHash();
-        $packId = $this->getSharedStorage()->get($packReference);
-        $packedProducts = $this->getQueryBus()->handle(new GetPackedProducts($packId));
-        $notExistingProducts = [];
+        $this->assertPackContents($packReference, $table, ShopConstraint::shop($this->getDefaultShopId()));
+    }
 
-        foreach ($data as $row) {
-            $productReference = $row['product'];
-            $expectedQty = (int) $row['quantity'];
-            $expectedPackedProductId = $this->getSharedStorage()->get($productReference);
-            $expectedCombinationId = $this->getExpectedCombinationId($row);
-
-            $foundProduct = false;
-
-            /**
-             * @var int
-             * @var PackedProduct $packedProduct
-             */
-            foreach ($packedProducts as $key => $packedProduct) {
-                if ($packedProduct->getProductId() === $expectedPackedProductId) {
-                    $foundProduct = true;
-                    Assert::assertEquals(
-                        $expectedQty,
-                        $packedProduct->getQuantity(),
-                        sprintf('Unexpected quantity of packed product "%s"', $productReference)
-                    );
-
-                    Assert::assertEquals(
-                        $expectedCombinationId,
-                        $packedProduct->getCombinationId(),
-                        sprintf('Unexpected packed product "%s" combination', $productReference)
-                    );
-
-                    //unset asserted product to check if there was any excessive actual products after loops
-                    unset($packedProducts[$key]);
-                    break;
-                }
-            }
-
-            if (!$foundProduct) {
-                if ($expectedCombinationId) {
-                    $notExistingProducts[$productReference][$row['combination']] = $expectedQty;
-                } else {
-                    $notExistingProducts[$productReference] = $expectedQty;
-                }
-            }
-        }
-
-        if (!empty($notExistingProducts)) {
-            throw new RuntimeException(sprintf(
-                'Failed to find following packed products: %s',
-                var_export($notExistingProducts, true)
-            ));
-        }
-
-        if (!empty($packedProducts)) {
-            throw new RuntimeException(sprintf(
-                'Following packed products were not expected: %s',
-                var_export($packedProducts, true)
-            ));
+    /**
+     * @Then pack :packReference should contain products with following details for shop(s) :shopReferences:
+     *
+     * @param string $packReference
+     * @param TableNode $table
+     * @param string $shopReferences
+     */
+    public function assertPackContentsForShops(string $packReference, TableNode $table, string $shopReferences): void
+    {
+        foreach (explode(',', $shopReferences) as $shopReference) {
+            $this->assertPackContents($packReference, $table, ShopConstraint::shop((int) $this->getSharedStorage()->get($shopReference)));
         }
     }
 
     /**
      * @Then I should get error that product for packing quantity is invalid
      */
-    public function assertPackProductQuantityError()
+    public function assertPackProductQuantityError(): void
     {
         $this->assertLastErrorIs(
             ProductPackConstraintException::class,
@@ -183,7 +127,7 @@ class UpdatePackFeatureContext extends AbstractProductFeatureContext
     /**
      * @Then I should get error that I cannot add pack into a pack
      */
-    public function assertAddingPackToPackError()
+    public function assertAddingPackToPackError(): void
     {
         $this->assertLastErrorIs(
             ProductPackConstraintException::class,
@@ -202,6 +146,127 @@ class UpdatePackFeatureContext extends AbstractProductFeatureContext
             return $this->getSharedStorage()->get($dataRow['combination']);
         }
 
-        return CombinationId::NO_COMBINATION;
+        return NoCombinationId::NO_COMBINATION_ID;
+    }
+
+    private function assertPackContents(string $packReference, TableNode $table, ShopConstraint $shopConstraint): void
+    {
+        $data = $table->getColumnsHash();
+        $packId = $this->getSharedStorage()->get($packReference);
+        /** @var array<int, PackedProductDetails> $packedProducts */
+        $packedProducts = $this->getQueryBus()->handle(
+            new GetPackedProducts(
+                $packId,
+                $this->getDefaultLangId(),
+                $shopConstraint
+            )
+        );
+        if (count($data) !== count($packedProducts)) {
+            throw new RuntimeException(sprintf(
+                'Incorrect number of product for shop %d expected %d but got %d instead',
+                $shopConstraint->getShopId()->getValue(),
+                count($data),
+                count($packedProducts)
+            ));
+        }
+
+        $notExistingProducts = [];
+
+        foreach ($data as $expectedPackedProduct) {
+            $productReference = $expectedPackedProduct['product'];
+            $expectedQuantity = (int) $expectedPackedProduct['quantity'];
+            $expectedName = $expectedPackedProduct['name'];
+            $expectedCombination = $expectedPackedProduct['combination'];
+            $expectedPackedProductId = $this->getSharedStorage()->get($productReference);
+            $expectedCombinationId = !empty($expectedPackedProduct['combination']) ? $this->getSharedStorage()->get($expectedPackedProduct['combination']) : 0;
+            $foundProduct = false;
+
+            foreach ($packedProducts as $key => $packedProduct) {
+                if ($packedProduct->getProductId() === $expectedPackedProductId) {
+                    $foundProduct = true;
+
+                    Assert::assertEquals(
+                        $expectedName,
+                        $packedProduct->getProductName(),
+                        sprintf('Unexpected name of packed product "%s"', $productReference)
+                    );
+
+                    if ($expectedCombination !== '') {
+                        Assert::assertEquals(
+                            $expectedCombinationId,
+                            $packedProduct->getCombinationId(),
+                            sprintf('Unexpected combination (%s) of packed product "%s"', $expectedCombinationId, $productReference)
+                        );
+                    }
+
+                    Assert::assertEquals(
+                        $expectedQuantity,
+                        $packedProduct->getQuantity(),
+                        sprintf('Unexpected quantity of packed product "%s"', $productReference)
+                    );
+
+                    $realImageUrl = $this->getRealImageUrl($expectedPackedProduct['image url']);
+                    Assert::assertEquals(
+                        $realImageUrl,
+                        $packedProduct->getImageUrl(),
+                        sprintf(
+                            'Invalid product image url, expected %s but got %s instead.',
+                            $realImageUrl,
+                            $packedProduct->getImageUrl()
+                        )
+                    );
+
+                    if (isset($expectedPackedProduct['reference'])) {
+                        Assert::assertEquals(
+                            $expectedPackedProduct['reference'],
+                            $packedProduct->getReference(),
+                            sprintf('Unexpected reference of packed product "%s"', $productReference)
+                        );
+                    }
+
+                    // unset asserted product to check if there was any excessive actual products after loops
+                    unset($packedProducts[$key]);
+                    break;
+                }
+            }
+
+            if (!$foundProduct) {
+                if ($expectedCombinationId) {
+                    $notExistingProducts[$productReference][$expectedPackedProduct['combination']] = $expectedQuantity;
+                } else {
+                    $notExistingProducts[$productReference] = $expectedQuantity;
+                }
+            }
+        }
+
+        if (!empty($notExistingProducts)) {
+            throw new RuntimeException(sprintf(
+                'Failed to find following packed products for shop %d: %s',
+                $shopConstraint->getShopId()->getValue(),
+                var_export($notExistingProducts, true)
+            ));
+        }
+
+        if (!empty($packedProducts)) {
+            throw new RuntimeException(sprintf(
+                'Following packed products were not expected for shop %d: %s',
+                $shopConstraint->getShopId()->getValue(),
+                var_export($packedProducts, true)
+            ));
+        }
+    }
+
+    private function assertPackEmpty(string $packReference, ShopConstraint $shopConstraint): void
+    {
+        $packId = $this->getSharedStorage()->get($packReference);
+
+        $packedProducts = $this->getQueryBus()->handle(
+            new GetPackedProducts(
+                $packId,
+                $this->getDefaultLangId(),
+                $shopConstraint
+            )
+        );
+        Assert::assertEmpty($packedProducts);
     }
 }

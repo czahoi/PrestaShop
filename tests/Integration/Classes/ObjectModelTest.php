@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -32,8 +12,12 @@ use Configuration;
 use Db;
 use Language;
 use PHPUnit\Framework\TestCase;
+use PrestaShopBundle\Install\SqlLoader;
+use ReflectionException;
+use ReflectionMethod;
 use Shop;
 use Tests\Resources\classes\TestableObjectModel;
+use Tests\Resources\DatabaseDump;
 
 class ObjectModelTest extends TestCase
 {
@@ -63,16 +47,52 @@ class ObjectModelTest extends TestCase
      */
     private $secondShopId;
 
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        static::cleanDatabase();
+
+        static::installTestableObjectTables();
+        static::installLanguages();
+        static::installShops();
+        Shop::resetStaticCache();
+        Language::resetStaticCache();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        parent::tearDownAfterClass();
+        static::cleanDatabase();
+        Shop::resetStaticCache();
+        Language::resetStaticCache();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Because if process isolation we cannot rely on setupBeforeClass because it is called on each run, so we have
-        // to initialize our test data during setup which implies checking at each time if the fixtures data have been
-        // created or not
-        $this->installTestableObjectTables();
-        $this->installLanguages();
-        $this->installShops();
+        $this->defaultLanguageId = (int) Configuration::get('PS_LANG_DEFAULT');
+        $this->secondLanguageId = (int) Language::getIdByIso('fr');
+        $this->defaultShopId = (int) Configuration::get('PS_SHOP_DEFAULT');
+        $this->secondShopId = Shop::getIdByName('Shop 2');
+    }
+
+    /**
+     * Check if html in trans is not escaped by trans method but escaped with htmlspecialchars on parameters
+     *
+     * @return void
+     *
+     * @throws ReflectionException
+     */
+    public function testTrans(): void
+    {
+        $newObject = new TestableObjectModel();
+        $transMethod = new ReflectionMethod($newObject, 'trans');
+        $trans = $transMethod->invoke($newObject, '<a href="test">%d Succesful deletion "%s"</a>', [10, '<b>stringTest</b>'], 'Admin.Notifications.Success');
+        $this->assertEquals('<a href="test">10 Succesful deletion "<b>stringTest</b>"</a>', $trans);
+
+        $trans = $transMethod->invoke($newObject, '<a href="test">%d Succesful deletion "%s"</a>', [10, htmlspecialchars('<b>stringTest</b>')], 'Admin.Notifications.Success');
+        $this->assertEquals('<a href="test">10 Succesful deletion "&lt;b&gt;stringTest&lt;/b&gt;"</a>', $trans);
     }
 
     public function testAdd(): void
@@ -113,6 +133,29 @@ class ObjectModelTest extends TestCase
         $this->assertEquals($localizedNames[$this->secondLanguageId], $secondLangObject->name);
     }
 
+    public function testAddPreservesZeroMultilangValue(): void
+    {
+        // Add an object containing an explicit zero in the non-default language
+        $localizedNames = [
+            $this->defaultLanguageId => '10',
+            $this->secondLanguageId => '0',
+        ];
+        $newObject = new TestableObjectModel();
+        $newObject->quantity = 1;
+        $newObject->enabled = true;
+        $newObject->name = $localizedNames;
+
+        $this->assertTrue((bool) $newObject->add());
+        $this->assertNotNull($newObject->id);
+
+        // Verify that persistence did not replace zero with the default language value
+        $savedObject = new TestableObjectModel((int) $newObject->id);
+        $this->assertSame($localizedNames, $savedObject->name);
+    }
+
+    /**
+     * @depends testAdd
+     */
     public function testUpdate(): void
     {
         $quantity = 42;
@@ -165,6 +208,8 @@ class ObjectModelTest extends TestCase
     }
 
     /**
+     * @depends testUpdate
+     *
      * @dataProvider getPartialUpdates
      *
      * @param array $initialProperties
@@ -321,6 +366,8 @@ class ObjectModelTest extends TestCase
     }
 
     /**
+     * @depends testPartialUpdate
+     *
      * @dataProvider getMultiShopValues
      *
      * @param array $initialProperties
@@ -335,10 +382,10 @@ class ObjectModelTest extends TestCase
 
         // Define the shop associated to the entity based on the parameter
         $initialShopIds = [];
-        if (in_array(static::DEFAULT_SHOP_PLACEHOLDER, $initialShops)) {
+        if (in_array(self::DEFAULT_SHOP_PLACEHOLDER, $initialShops)) {
             $initialShopIds[] = $this->defaultShopId;
         }
-        if (in_array(static::SECOND_SHOP_PLACEHOLDER, $initialShops)) {
+        if (in_array(self::SECOND_SHOP_PLACEHOLDER, $initialShops)) {
             $initialShopIds[] = $this->secondShopId;
         }
         $newObject->id_shop_list = $initialShopIds;
@@ -351,7 +398,7 @@ class ObjectModelTest extends TestCase
 
         // Now we update the values for different shops
         foreach ($multiShopValues as $shopId => $updateValues) {
-            $shopId = $shopId === static::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
+            $shopId = $shopId === self::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
             // Fetch the object with specified shopId, then apply modifications
             $objectToUpdate = new TestableObjectModel($createdId, null, $shopId);
             // We force this field so that only one shop is updated
@@ -362,7 +409,7 @@ class ObjectModelTest extends TestCase
 
         // Finally, we fetch the object for each shop separately and check that the values match the expected data
         foreach ($expectedMultiShopValues as $shopId => $expectedValues) {
-            $shopId = $shopId === static::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
+            $shopId = $shopId === self::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
             $updatedObject = new TestableObjectModel($createdId, null, $shopId);
             $this->checkObjectFields($updatedObject, $expectedValues);
         }
@@ -436,6 +483,8 @@ class ObjectModelTest extends TestCase
     }
 
     /**
+     * @depends testMultiShopUpdate
+     *
      * @dataProvider getPartialMultiShopValues
      *
      * @param array $initialProperties
@@ -456,10 +505,10 @@ class ObjectModelTest extends TestCase
 
         // Define the shop associated to the entity based on the parameter
         $initialShopIds = [];
-        if (in_array(static::DEFAULT_SHOP_PLACEHOLDER, $initialShops)) {
+        if (in_array(self::DEFAULT_SHOP_PLACEHOLDER, $initialShops)) {
             $initialShopIds[] = $this->defaultShopId;
         }
-        if (in_array(static::SECOND_SHOP_PLACEHOLDER, $initialShops)) {
+        if (in_array(self::SECOND_SHOP_PLACEHOLDER, $initialShops)) {
             $initialShopIds[] = $this->secondShopId;
         }
         $newObject->id_shop_list = $initialShopIds;
@@ -473,7 +522,7 @@ class ObjectModelTest extends TestCase
         // Now we update the values for different shops
         foreach ($multiShopValues as $shopId => $updateValues) {
             $fieldsToUpdate = $multiShopFieldsToUpdate[$shopId];
-            $shopId = $shopId === static::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
+            $shopId = $shopId === self::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
             // Fetch the object with specified shopId
             $objectToUpdate = new TestableObjectModel($createdId, null, $shopId);
             // We force this field so that only one shop is updated
@@ -492,7 +541,7 @@ class ObjectModelTest extends TestCase
 
         // Finally, we fetch the object for each shop separately and check that the values match the expected data
         foreach ($expectedMultiShopValues as $shopId => $expectedValues) {
-            $shopId = $shopId === static::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
+            $shopId = $shopId === self::DEFAULT_SHOP_PLACEHOLDER ? $this->defaultShopId : $this->secondShopId;
             $updatedObject = new TestableObjectModel($createdId, null, $shopId);
             $this->checkObjectFields($updatedObject, $expectedValues);
         }
@@ -640,53 +689,45 @@ class ObjectModelTest extends TestCase
      * Following are fixtures installation functions
      */
 
-    private function installTestableObjectTables(): void
+    protected static function cleanDatabase(): void
     {
-        $testableObjectSqlFile = dirname(__DIR__, 2) . '/Resources/sql/install_testable_object.sql';
-        $sqlRequest = file_get_contents($testableObjectSqlFile);
-        $sqlRequest = preg_replace('/PREFIX_/', _DB_PREFIX_, $sqlRequest);
-
-        $dbCollation = Db::getInstance()->getValue('SELECT @@collation_database');
-        $allowedCollations = ['utf8mb4_general_ci', 'utf8mb4_unicode_ci'];
-        $collateReplacement = (empty($dbCollation) || !in_array($dbCollation, $allowedCollations)) ? '' : 'COLLATE ' . $dbCollation;
-        $sqlRequest = preg_replace('/COLLATION/', $collateReplacement, $sqlRequest);
-
-        $sqlRequest = preg_replace('/ENGINE_TYPE/', _MYSQL_ENGINE_, $sqlRequest);
-
         $db = Db::getInstance();
-        $db->execute($sqlRequest);
+        $db->execute(sprintf('DROP TABLE IF EXISTS %stestable_object', _DB_PREFIX_));
+        $db->execute(sprintf('DROP TABLE IF EXISTS %stestable_object_lang', _DB_PREFIX_));
+        $db->execute(sprintf('DROP TABLE IF EXISTS %stestable_object_shop', _DB_PREFIX_));
+        // The tables are dropped, so the associations TestableObjectModel registered must
+        // go too: a stale entry would make every later Shop::delete() of the same PHP
+        // process fail in its association cleanup loop.
+        Shop::removeTableAssociation('testable_object');
+        Shop::removeTableAssociation('testable_object_lang');
+        DatabaseDump::restoreAllTables();
     }
 
-    private function installLanguages(): void
+    protected static function installTestableObjectTables(): void
     {
-        $this->defaultLanguageId = (int) Configuration::get('PS_LANG_DEFAULT');
-        $this->secondLanguageId = (int) Language::getIdByIso('fr');
-        if ($this->secondLanguageId) {
-            $this->cleanUndesiredLanguages();
+        $allowedCollations = ['utf8mb4_general_ci', 'utf8mb4_unicode_ci'];
+        $databaseCollation = Db::getInstance()->getValue('SELECT @@collation_database');
+        $sqlLoader = new SqlLoader();
+        $sqlLoader->setMetaData([
+            'PREFIX_' => _DB_PREFIX_,
+            'ENGINE_TYPE' => _MYSQL_ENGINE_,
+            'COLLATION' => (empty($databaseCollation) || !in_array($databaseCollation, $allowedCollations)) ? '' : 'COLLATE ' . $databaseCollation,
+        ]);
+        $sqlLoader->parseFile(dirname(__DIR__, 2) . '/Resources/sql/install_testable_object.sql');
+    }
 
-            return;
-        }
-
+    protected static function installLanguages(): void
+    {
         $language = new Language();
         $language->name = 'fr';
         $language->iso_code = 'fr';
         $language->locale = 'fr-FR';
         $language->language_code = 'fr-FR';
         $language->add();
-        $this->secondLanguageId = (int) $language->id;
-        $this->cleanUndesiredLanguages();
     }
 
-    private function installShops(): void
+    protected static function installShops(): void
     {
-        $this->defaultShopId = (int) Configuration::get('PS_SHOP_DEFAULT');
-        $this->secondShopId = Shop::getIdByName('Shop 2');
-        if ($this->secondShopId) {
-            $this->cleanUndesiredShops();
-
-            return;
-        }
-
         $shop = new Shop();
         $shop->name = 'Shop 2';
         $shop->id_category = 1;
@@ -694,42 +735,5 @@ class ObjectModelTest extends TestCase
         $shop->domain = Configuration::get('PS_SHOP_DOMAIN');
         $shop->physical_uri = '/';
         $shop->add();
-        $this->secondShopId = (int) $shop->id;
-        $this->cleanUndesiredShops();
-    }
-
-    /**
-     * We need to remove extra languages because they would mess with the expected content,
-     * but we don't want to use DatabaseDump::restoredDB because all the tests are process
-     * isolated and it would be dumped on each test which would take too long.
-     */
-    private function cleanUndesiredLanguages(): void
-    {
-        // Clean undesired languages
-        $db = Db::getInstance();
-        $db->execute(sprintf(
-            'DELETE FROM %slang WHERE id_lang != %d AND id_lang != %d',
-            _DB_PREFIX_,
-            $this->defaultLanguageId,
-            $this->secondLanguageId
-        ));
-        Language::resetCache();
-    }
-
-    /**
-     * We need to remove extra shops because they would mess with the expected content,
-     * but we don't want to use DatabaseDump::restoredDB because all the tests are process
-     * isolated and it would be dumped on each test which would take too long.
-     */
-    private function cleanUndesiredShops(): void
-    {
-        // Clean undesired shops
-        $db = Db::getInstance();
-        $db->execute(sprintf(
-            'DELETE FROM %sshop WHERE id_shop != %d AND id_shop != %d',
-            _DB_PREFIX_,
-            $this->defaultShopId,
-            $this->secondShopId
-        ));
     }
 }

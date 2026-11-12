@@ -1,35 +1,26 @@
-<!--**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+<!--*
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  *-->
 <template>
   <section class="stock-movements">
     <PSTable class="mt-1">
       <thead>
         <tr>
+          <th
+            scope="col"
+          >
+            <PSSort
+              order="product_id"
+              @sort="sort"
+              :current-sort="currentSort"
+            >
+              {{ trans('title_product_id') }}
+            </PSSort>
+          </th>
           <th width="30%">
             <PSSort
-              order="product"
+              order="product_name"
               @sort="sort"
               :current-sort="currentSort"
             >
@@ -66,7 +57,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-if="this.isLoading">
+        <tr v-if="isLoading">
           <td colspan="6">
             <PSLoader
               v-for="(n, index) in 3"
@@ -103,21 +94,54 @@
 </template>
 
 <script lang="ts">
-  import Vue from 'vue';
-  import PSTable from '@app/widgets/ps-table/ps-table';
-  import PSSort from '@app/widgets/ps-table/ps-sort';
-  import PSAlert from '@app/widgets/ps-alert';
-  import PSLoader from '@app/widgets/ps-loader';
-  import MovementLine from './movement-line';
+  import PSTable from '@app/widgets/ps-table/ps-table.vue';
+  import PSSort from '@app/widgets/ps-table/ps-sort.vue';
+  import PSAlert from '@app/widgets/ps-alert.vue';
+  import PSLoader from '@app/widgets/ps-loader.vue';
+  import {defineComponent} from 'vue';
+  import TranslationMixin from '@app/pages/stock/mixins/translate';
+  import MovementLine from './movement-line.vue';
 
   const DEFAULT_SORT = 'desc';
 
-  export default Vue.extend({
+  /* eslint-disable camelcase */
+  export interface StockMovement {
+    attribute_name: string | null;
+    combination_cover_id: number;
+    combination_id: number;
+    combination_name: string;
+    combination_thumbnail: string;
+    date_add: string;
+    employee_firstname: string;
+    employee_lastname: string;
+    id_employee: number;
+    id_order: number;
+    id_stock: number;
+    id_stock_mvt: number;
+    id_stock_mvt_reason: number;
+    movement_reason: string;
+    order_link: string;
+    physical_quantity: number;
+    product_attributes: string;
+    product_cover_id: number;
+    product_features: string;
+    product_id: number;
+    product_name: string;
+    product_reference: string;
+    product_thumbnail: string;
+    product_url: string;
+    sign: number;
+    supplier_id: number;
+    supplier_name: string;
+  }
+  /* eslint-enable camelcase */
+
+  export default defineComponent({
     computed: {
       isLoading(): boolean {
         return this.$store.state.isLoading;
       },
-      movements(): Record<string, any> {
+      movements(): Array<StockMovement> {
         return this.$store.state.movements;
       },
       emptyMovements(): boolean {
@@ -127,9 +151,11 @@
         return this.$store.state.order;
       },
     },
+    mixins: [TranslationMixin],
     methods: {
       sort(order: string, sortDirection: string): void {
         this.$store.dispatch('updateOrder', order);
+        this.$store.dispatch('updateSort', sortDirection);
         this.$emit('fetch', sortDirection === 'desc' ? 'desc' : 'asc');
       },
     },

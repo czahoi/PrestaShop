@@ -1,9 +1,13 @@
+/**
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
 .ps-radio {
   [type="radio"] {
     position: absolute;
     left: -9999px;
 
-    & + label {
+    + label {
       position: relative;
       display: inline-block;
       padding-left: 28px;

@@ -1,26 +1,6 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 import {Grid} from '@PSTypes/grid';
 import GridMap from '@components/grid/grid-map';
@@ -47,6 +27,9 @@ export default class AsyncToggleColumnExtension {
           event.preventDefault();
         }
 
+        const $newStateInput = $button.find('input:checked');
+        const newState = Boolean($newStateInput.val());
+
         $.post({
           url: $button.data('toggle-url'),
         })
@@ -59,14 +42,32 @@ export default class AsyncToggleColumnExtension {
               return;
             }
 
-            window.showErrorMessage(response.message);
+            this.showErrorMessage(response.message, $newStateInput.prop('name'), !newState);
           })
           .catch((error: AjaxError) => {
             const response = error.responseJSON;
-
-            window.showErrorMessage(response.message);
+            this.showErrorMessage(response.message, $newStateInput.prop('name'), !newState);
           });
       });
+  }
+
+  private showErrorMessage(message: string, switchName: string, initialState: boolean): void {
+    // We need to toggle back the switch state
+    this.toggleSwitch(switchName, initialState);
+
+    window.showErrorMessage(message);
+  }
+
+  private toggleSwitch(switchName: string, checked: boolean): void {
+    const $switchOn = $(`[name="${switchName}"][value="1"]`);
+    const $switchOff = $(`[name="${switchName}"][value="0"]`);
+
+    if ($switchOn.is(':checked') !== checked) {
+      $switchOn.prop('checked', checked);
+    }
+    if ($switchOff.is(':checked') === checked) {
+      $switchOff.prop('checked', !checked);
+    }
   }
 
   /**

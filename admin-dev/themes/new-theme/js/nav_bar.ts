@@ -1,32 +1,12 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import PerfectScrollbar from 'perfect-scrollbar';
 import 'perfect-scrollbar/css/perfect-scrollbar.css';
 import getAnimationEvent from './app/utils/animations';
-import NavbarTransitionHandler from './components/navbar-transition-handler';
+import {NavbarTransitionHandler, MAX_MOBILE_WIDTH} from './components/navbar-transition-handler';
 import GlobalMap from './global-map';
 
 const {$} = window;
@@ -61,20 +41,22 @@ export default class NavBar {
           });
         }
 
-        $navBar.find('.link-levelone').hover(
-          function onMouseEnter() {
+        $navBar.find('.link-levelone').on(
+          'mouseenter',
+          function () {
             const itemOffsetTop = $(this).position().top;
             $(this).addClass('link-hover');
             $(this)
               .find('ul.submenu')
               .css('top', itemOffsetTop);
           },
-          function onMouseLeave() {
+        ).on('mouseleave',
+          function () {
             $(this).removeClass('link-hover');
           },
         );
 
-        $(GlobalMap.navBar.menuItemLink).on('click', function onNavBarClick(e) {
+        $(GlobalMap.navBar.menuItemLink).off('click').on('click', function onNavBarClick(e) {
           e.preventDefault();
           e.stopPropagation();
 
@@ -127,7 +109,7 @@ export default class NavBar {
           $submenu.find('ul.submenu').css('top', itemOffsetTop);
         });
 
-        $navBar.on('click', '.menu-collapse', function onNavBarClick() {
+        $navBar.off('click', '.menu-collapse').on('click', '.menu-collapse', function onNavBarClick() {
           $('body').toggleClass('page-sidebar-closed');
 
           NavBarTransitions.toggle();
@@ -159,7 +141,6 @@ export default class NavBar {
         });
 
         addMobileBodyClickListener();
-        const MAX_MOBILE_WIDTH = 1023;
         const windowWidth = <number>$(window).width();
 
         if (windowWidth <= MAX_MOBILE_WIDTH) {
@@ -179,6 +160,7 @@ export default class NavBar {
             && currentWindowWidth <= MAX_MOBILE_WIDTH
           ) {
             this.mobileNav();
+            $('nav.nav-bar ul.main-menu').removeClass('sidebar-closed');
           }
         });
       }
@@ -207,7 +189,7 @@ export default class NavBar {
       .addClass('link')
       .removeClass('m-t-1')
       .prop('outerHTML');
-    const $employee = $('.employee_avatar').prop('outerHTML');
+    const $employee = $('.employee-top').prop('outerHTML');
     const profileLink = $('.profile-link').attr('href');
     const $mainMenu = $('.main-menu');
 
@@ -245,9 +227,6 @@ export default class NavBar {
       .find('.employee_avatar .material-icons, .employee_avatar span')
       .wrap(`<a href='${profileLink}'></a>`);
     $('.js-mobile-menu').on('click', expand);
-    $('.js-notifs_dropdown').css({
-      height: window.innerHeight,
-    });
 
     function expand() {
       if ($('div.notification-center.dropdown').hasClass('open')) {
@@ -291,7 +270,6 @@ export default class NavBar {
       .removeClass('collapse')
       .addClass('submenu');
     $('.shop-list-title').remove();
-    $('.js-non-responsive').hide();
     $('.mobile-layer')
       .addClass('d-none')
       .removeClass('expanded');

@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\PrestaShopBundle\Service\DataProvider\Admin;
@@ -30,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use PrestaShop\PrestaShop\Adapter\Module\Module;
 use PrestaShop\PrestaShop\Core\Util\File\YamlParser;
 use PrestaShopBundle\Service\DataProvider\Admin\CategoriesProvider;
+use stdClass;
 
 class CategoriesProviderTest extends TestCase
 {
@@ -47,6 +28,16 @@ class CategoriesProviderTest extends TestCase
             $prestashopAddonsConfig['prestashop']['addons']['categories'],
             ['my_theme']
         );
+    }
+
+    public function testGetCategories(): void
+    {
+        $categories = $this->provider->getCategories();
+        $this->assertArrayHasKey(
+            'categories',
+            $categories
+        );
+        $this->assertInstanceOf(stdClass::class, $categories['categories']);
     }
 
     public function testGetCategoriesMenuWithoutModules()
@@ -136,6 +127,13 @@ class CategoriesProviderTest extends TestCase
                             'modules' => [],
                             'subMenu' => [],
                         ],
+                        'theme_modules' => (object) [
+                            'tab' => 'theme_modules',
+                            'name' => 'Theme modules',
+                            'refMenu' => 'theme_modules',
+                            'modules' => [],
+                            'subMenu' => [],
+                        ],
                     ],
                 ],
             ],
@@ -146,8 +144,7 @@ class CategoriesProviderTest extends TestCase
     public function testGetCategoriesMenuWithModulesAndThemes()
     {
         $gamification = $this->mockModule('gamification');
-        $cronjobs = $this->mockModule('cronjobs');
-        $myCustomTheme = $this->mockModule('my_theme', null, 'administration');
+        $myCustomTheme = $this->mockModule('my_theme', null);
         $this->assertEquals(
             [
                 'categories' => (object) [
@@ -230,7 +227,7 @@ class CategoriesProviderTest extends TestCase
                             'tab' => 'other',
                             'name' => 'Other',
                             'refMenu' => 'other',
-                            'modules' => [$gamification, $cronjobs],
+                            'modules' => [$gamification],
                             'subMenu' => [],
                         ],
                         'theme_modules' => (object) [
@@ -246,7 +243,6 @@ class CategoriesProviderTest extends TestCase
             $this->provider->getCategoriesMenu(
                 [
                     $gamification,
-                    $cronjobs,
                     $myCustomTheme,
                 ]
             )
@@ -256,7 +252,6 @@ class CategoriesProviderTest extends TestCase
     public function testGetCategoriesMenuWithModulesWithCustomTab()
     {
         $gamification = $this->mockModule('gamification', 'administration');
-        $cronjobs = $this->mockModule('cronjobs', 'front_office_features');
         $this->assertEquals(
             [
                 'categories' => (object) [
@@ -276,7 +271,7 @@ class CategoriesProviderTest extends TestCase
                             'tab' => 'front_office_features',
                             'name' => 'Design & Navigation',
                             'refMenu' => '507',
-                            'modules' => [$cronjobs],
+                            'modules' => [],
                             'subMenu' => [],
                         ],
                         'Promotions & Marketing' => (object) [
@@ -342,106 +337,11 @@ class CategoriesProviderTest extends TestCase
                             'modules' => [],
                             'subMenu' => [],
                         ],
-                    ],
-                ],
-            ],
-            $this->provider->getCategoriesMenu(
-                [
-                    $gamification,
-                    $cronjobs,
-                ]
-            )
-        );
-    }
-
-    public function testGetCategoriesMenuWithModulesWithParentEnglishName()
-    {
-        $gamification = $this->mockModule('gamification', null, 'Promotions & Marketing');
-        $cronjobs = $this->mockModule('cronjobs', null, 'Product Page');
-        $noTabsNoCategories = $this->mockModule('example');
-        $this->assertEquals(
-            [
-                'categories' => (object) [
-                    'tab' => null,
-                    'name' => 'Categories',
-                    'refMenu' => 'categories',
-                    'modules' => [],
-                    'subMenu' => [
-                        'Administration' => (object) [
-                            'tab' => 'administration',
-                            'name' => 'Administration',
-                            'refMenu' => '440',
+                        'theme_modules' => (object) [
+                            'tab' => 'theme_modules',
+                            'name' => 'Theme modules',
+                            'refMenu' => 'theme_modules',
                             'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Design & Navigation' => (object) [
-                            'tab' => 'front_office_features',
-                            'name' => 'Design & Navigation',
-                            'refMenu' => '507',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Promotions & Marketing' => (object) [
-                            'tab' => 'pricing_promotion',
-                            'name' => 'Promotions & Marketing',
-                            'refMenu' => '496',
-                            'modules' => [$gamification],
-                            'subMenu' => [],
-                        ],
-                        'Product Page' => (object) [
-                            'tab' => 'administration',
-                            'name' => 'Product Page',
-                            'refMenu' => '460',
-                            'modules' => [$cronjobs],
-                            'subMenu' => [],
-                        ],
-                        'Payment' => (object) [
-                            'tab' => 'payments_gateways',
-                            'name' => 'Payment',
-                            'refMenu' => '481',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Shipping & Logistics' => (object) [
-                            'tab' => 'shipping_logistics',
-                            'name' => 'Shipping & Logistics',
-                            'refMenu' => '518',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Traffic & Marketplaces' => (object) [
-                            'tab' => 'checkout',
-                            'name' => 'Traffic & Marketplaces',
-                            'refMenu' => '488',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Customers' => (object) [
-                            'tab' => 'administration',
-                            'name' => 'Customers',
-                            'refMenu' => '475',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Facebook & Social Networks' => (object) [
-                            'tab' => 'advertising_marketing',
-                            'name' => 'Facebook & Social Networks',
-                            'refMenu' => '455',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'Specialized Platforms' => (object) [
-                            'tab' => 'others',
-                            'name' => 'Specialized Platforms',
-                            'refMenu' => '469',
-                            'modules' => [],
-                            'subMenu' => [],
-                        ],
-                        'other' => (object) [
-                            'tab' => 'other',
-                            'name' => 'Other',
-                            'refMenu' => 'other',
-                            'modules' => [$noTabsNoCategories],
                             'subMenu' => [],
                         ],
                     ],
@@ -450,14 +350,12 @@ class CategoriesProviderTest extends TestCase
             $this->provider->getCategoriesMenu(
                 [
                     $gamification,
-                    $cronjobs,
-                    $noTabsNoCategories,
                 ]
             )
         );
     }
 
-    private function mockModule(string $moduleName, string $tab = null, string $categoryName = null)
+    private function mockModule(string $moduleName, ?string $tab = null)
     {
         $mock = $this->getMockBuilder(Module::class)
             ->getMock();
@@ -465,10 +363,6 @@ class CategoriesProviderTest extends TestCase
 
         if ($tab !== null) {
             $mock->attributes->set('tab', $tab);
-        }
-
-        if ($categoryName !== null) {
-            $mock->attributes->set('categoryParentEnglishName', $categoryName);
         }
 
         return $mock;

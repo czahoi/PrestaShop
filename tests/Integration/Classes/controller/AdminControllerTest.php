@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\Classes\controller;
@@ -36,62 +16,96 @@ use PHPUnit\Framework\TestCase;
 use PrestaShop\PrestaShop\Adapter\EntityMapper;
 use PrestaShop\PrestaShop\Adapter\ServiceLocator;
 use PrestaShop\PrestaShop\Core\Feature\FeatureInterface;
+use PrestaShop\PrestaShop\Core\FeatureFlag\FeatureFlagStateCheckerInterface;
+use PrestaShop\PrestaShop\Core\Foundation\IoC\Container;
 use PrestaShop\PrestaShop\Core\Foundation\IoC\Container as LegacyContainer;
+use PrestaShop\PrestaShop\Core\Image\AvifExtensionChecker;
+use PrestaShop\PrestaShop\Core\Image\ImageFormatConfiguration;
 use PrestaShop\PrestaShop\Core\Localization\CLDR\LocaleRepository;
 use PrestaShop\PrestaShop\Core\Localization\Locale;
-use PrestaShopBundle\Controller\Admin\MultistoreController;
+use PrestaShop\PrestaShop\Core\Localization\Specification\Number as NumberSpecification;
+use PrestaShop\PrestaShop\Core\Localization\Specification\NumberInterface;
+use PrestaShop\PrestaShop\Core\Localization\Specification\NumberSymbolList;
+use PrestaShopBundle\Security\Admin\UserTokenManager;
+use ReflectionMethod;
+use ReflectionObject;
 use Shop;
 use Smarty;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Translation\Translator;
+use Tests\Integration\Utility\ContextMockerTrait;
 use Tools;
 
 class AdminControllerTest extends TestCase
 {
+    use ContextMockerTrait;
+
     /**
-     * @var Context|null
+     * @var Container|null
      */
-    private $context;
+    private $savedContainer;
+
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        self::declareRequiredConstants();
+        self::requireAliasesFunctions();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        parent::tearDownAfterClass();
+        Tools::resetRequest();
+    }
 
     protected function setUp(): void
     {
-        $this->declareRequiredConstants();
-        $this->requireAliasesFunctions();
+        self::mockContext();
+        $this->adaptMockContext(self::getMockedContext());
 
-        $this->context = Context::getContext();
-        Context::setInstanceForTesting($this->getMockContext());
-
+        $this->savedContainer = ServiceLocator::getContainer();
         ServiceLocator::setServiceContainerInstance($this->getMockLegacyContainer());
     }
 
     protected function tearDown(): void
     {
-        Context::setInstanceForTesting($this->context);
-    }
-
-    public static function tearDownAfterClass(): void
-    {
-        Tools::resetRequest();
+        ServiceLocator::setServiceContainerInstance($this->savedContainer);
     }
 
     /**
-     * @test
+     * Check if html in trans is not escaped by trans method but escaped with htmlspecialchars on parameters
+     *
      * @dataProvider getControllersClasses
      *
-     * @param $controllerClass
+     * @param string $controllerClass
      *
-     * @return mixed
+     * @return void
      */
-    public function itShouldRunTheTestedController($controllerClass): void
+    public function testTrans(string $controllerClass): void
+    {
+        $testedController = new $controllerClass();
+        $transMethod = new ReflectionMethod($testedController, 'trans');
+        $trans = $transMethod->invoke($testedController, '<a href="test">%d Succesful deletion "%s"</a>', [10, '<b>stringTest</b>'], 'Admin.Notifications.Success');
+        $this->assertEquals('<a href="test">10 Succesful deletion "<b>stringTest</b>"</a>', $trans);
+
+        $trans = $transMethod->invoke($testedController, '<a href="test">%d Succesful deletion "%s"</a>', [10, htmlspecialchars('<b>stringTest</b>')], 'Admin.Notifications.Success');
+        $this->assertEquals('<a href="test">10 Succesful deletion "&lt;b&gt;stringTest&lt;/b&gt;"</a>', $trans);
+    }
+
+    /**
+     * @dataProvider getControllersClasses
+     *
+     * @param string $controllerClass
+     *
+     * @return void
+     */
+    public function testItShouldRunTheTestedController(string $controllerClass): void
     {
         /**
          * @var Controller $testedController
          */
         $testedController = new $controllerClass();
-        $refController = new \ReflectionObject($testedController);
+        $refController = new ReflectionObject($testedController);
         $refProperty = $refController->getProperty('container');
-        $refProperty->setAccessible(true);
         $refProperty->setValue($testedController, $this->getMockContainerBuilder());
 
         if (!defined('_PS_BASE_URL_')) {
@@ -115,34 +129,23 @@ class AdminControllerTest extends TestCase
     {
         return [
             ['AdminCarriersController'],
-            ['AdminStatusesController'],
-            ['AdminLoginController'],
             ['AdminQuickAccessesController'],
             ['AdminCustomerThreadsController'],
-            ['AdminReferrersController'],
             ['AdminReturnController'],
             ['AdminStoresController'],
-            ['AdminSuppliersController'],
-            ['AdminAttributesGroupsController'],
             ['AdminNotFoundController'],
-            ['AdminFeaturesController'],
-            ['AdminGendersController'],
             ['AdminTagsController'],
             ['AdminShopController'],
             ['AdminCartRulesController'],
             ['AdminGroupsController'],
             ['AdminShopGroupController'],
             ['AdminTaxRulesGroupController'],
-            ['AdminCartsController'],
-            ['AdminImagesController'],
             ['AdminShopUrlController'],
-            ['AdminStatesController'],
             ['AdminStatsController'],
-            ['AdminLegacyLayoutController'],
         ];
     }
 
-    private function declareRequiredConstants(): void
+    private static function declareRequiredConstants(): void
     {
         $configuration = require_once _PS_CACHE_DIR_ . 'appParameters.php';
 
@@ -180,11 +183,6 @@ class AdminControllerTest extends TestCase
         }
     }
 
-    private function getMockTranslator(): Translator
-    {
-        return $this->getMockBuilder(Translator::class)->disableOriginalConstructor()->getMock();
-    }
-
     private function getMockSmarty(): Smarty
     {
         $mockSmarty = $this->getMockBuilder(Smarty::class)->getMock();
@@ -209,14 +207,18 @@ class AdminControllerTest extends TestCase
         return $mockEmployee;
     }
 
-    private function requireAliasesFunctions(): void
+    private static function requireAliasesFunctions(): void
     {
         require_once dirname(__DIR__, 4) . '/config/alias.php';
     }
 
     private function getMockLanguage(): Language
     {
-        return $this->getMockBuilder(Language::class)->getMock();
+        $language = $this->getMockBuilder(Language::class)->getMock();
+        $language->iso_code = 'en';
+        $language->locale = 'en';
+
+        return $language;
     }
 
     private function getMockShop(): Shop
@@ -238,35 +240,35 @@ class AdminControllerTest extends TestCase
 
     private function getMockContainerBuilder(): ContainerBuilder
     {
-        $mockContainerBuilder = $this->getMockBuilder(ContainerBuilder::class)->getMock();
+        $mockContainerBuilder = $this->getMockBuilder(ContainerBuilder::class)->disableOriginalConstructor()->getMock();
         $mockContainerBuilder->method('get')
             ->willReturnCallback(function (string $param) {
-                if ($param == Controller::SERVICE_LOCALE_REPOSITORY) {
+                if ($param === Controller::SERVICE_LOCALE_REPOSITORY) {
                     return $this->getMockLocaleRepository();
                 }
-                if ($param == 'prestashop.core.admin.multistore') {
-                    return $this->getMockMultistoreController();
-                }
-                if ($param == 'prestashop.adapter.multistore_feature') {
+                if ($param === 'prestashop.adapter.multistore_feature') {
                     return $this->getMockFeatureInterface();
+                }
+                if ($param === UserTokenManager::class) {
+                    return $this->getMockedUserTokenManager();
+                }
+                if ($param === 'PrestaShop\PrestaShop\Core\Image\AvifExtensionChecker') {
+                    return $this->getMockedAvifExtensionChecker();
+                }
+                if ($param === FeatureFlagStateCheckerInterface::class) {
+                    return $this->getMockedFeatureFlagStateCheckerInterface();
+                }
+                if ($param === ImageFormatConfiguration::class) {
+                    return $this->getMockedImageFormatConfiguration();
                 }
             });
 
         return $mockContainerBuilder;
     }
 
-    private function getMockContext(): Context
+    private function adaptMockContext(Context $mockContext): Context
     {
-        $mockContext = $this->getMockBuilder(Context::class)->getMock();
-
-        $mockContext->method('getTranslator')->willReturn(
-            $this->getMockTranslator()
-        );
-        $mockContext->method('getDevice')->willReturn(null);
-        $mockContext->method('getCurrentLocale')->willReturn(
-            $this->getMockLocale()
-        );
-
+        $mockContext->currentLocale = $this->getMockLocale();
         $mockContext->smarty = $this->getMockSmarty();
         $mockContext->employee = $this->getMockEmployee();
         $mockContext->language = $this->getMockLanguage();
@@ -293,7 +295,17 @@ class AdminControllerTest extends TestCase
 
     private function getMockLocale(): Locale
     {
-        return $this->getMockBuilder(Locale::class)->disableOriginalConstructor()->getMock();
+        $mockLocale = $this->getMockBuilder(Locale::class)->disableOriginalConstructor()->getMock();
+        $mockLocale
+            ->method('getPriceSpecification')
+            ->withAnyParameters()
+            ->willReturn($this->getMockNumberInterface());
+        $mockLocale
+            ->method('getNumberSpecification')
+            ->withAnyParameters()
+            ->willReturn($this->getMockNumberSpecification());
+
+        return $mockLocale;
     }
 
     private function getMockLocaleRepository(): LocaleRepository
@@ -307,15 +319,69 @@ class AdminControllerTest extends TestCase
         return $mockLocaleRepository;
     }
 
-    private function getMockMultistoreController(): MultistoreController
+    private function getMockedAvifExtensionChecker(): AvifExtensionChecker
     {
-        $mockResponse = $this->getMockBuilder(Response::class)->getMock();
-        $mockResponse->method('getContent')->willReturn('');
+        $mockAvifExtensionChecker = $this->getMockBuilder(AvifExtensionChecker::class)
+            ->getMock();
 
-        $mockMultistoreController = $this->getMockBuilder(MultistoreController::class)->getMock();
-        $mockMultistoreController->method('header')->withAnyParameters()->willReturn($mockResponse);
+        $mockAvifExtensionChecker->method('isAvailable')->willReturn(true);
 
-        return $mockMultistoreController;
+        return $mockAvifExtensionChecker;
+    }
+
+    private function getMockedFeatureFlagStateCheckerInterface(): FeatureFlagStateCheckerInterface
+    {
+        $mockFeatureFlagStateChecker = $this->getMockBuilder(FeatureFlagStateCheckerInterface::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $mockFeatureFlagStateChecker->method('isEnabled')->willReturn(false);
+
+        return $mockFeatureFlagStateChecker;
+    }
+
+    private function getMockedImageFormatConfiguration(): ImageFormatConfiguration
+    {
+        $mockImageFormatConfiguration = $this->getMockBuilder(ImageFormatConfiguration::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $mockImageFormatConfiguration->method('getGenerationFormats')->willReturn(['jpg']);
+
+        return $mockImageFormatConfiguration;
+    }
+
+    private function getMockNumberSpecification(): NumberSpecification
+    {
+        $mockNumberSpecification = $this->getMockBuilder(NumberSpecification::class)->disableOriginalConstructor()->getMock();
+        $mockNumberSpecification
+            ->method('getSymbolsByNumberingSystem')
+            ->withAnyParameters()
+            ->willReturn($this->getMockNumberSymbolList());
+
+        return $mockNumberSpecification;
+    }
+
+    private function getMockNumberSymbolList(): NumberSymbolList
+    {
+        $mockNumberSymbolList = $this->getMockBuilder(NumberSymbolList::class)->disableOriginalConstructor()->getMock();
+        $mockNumberSymbolList
+            ->method('toArray')
+            ->withAnyParameters()
+            ->willReturn([]);
+
+        return $mockNumberSymbolList;
+    }
+
+    private function getMockNumberInterface(): NumberInterface
+    {
+        $mockNumberInterface = $this->getMockBuilder(NumberInterface::class)->disableOriginalConstructor()->getMock();
+        $mockNumberInterface
+            ->method('getSymbolsByNumberingSystem')
+            ->withAnyParameters()
+            ->willReturn($this->getMockNumberSymbolList());
+
+        return $mockNumberInterface;
     }
 
     private function getMockFeatureInterface(): FeatureInterface
@@ -324,5 +390,13 @@ class AdminControllerTest extends TestCase
         $mockMockFeatureInterface->method('isUsed')->willReturn(false);
 
         return $mockMockFeatureInterface;
+    }
+
+    private function getMockedUserTokenManager(): UserTokenManager
+    {
+        $userTokenManager = $this->createMock(UserTokenManager::class);
+        $userTokenManager->method('getSymfonyToken')->willReturn('mockedToken');
+
+        return $userTokenManager;
     }
 }

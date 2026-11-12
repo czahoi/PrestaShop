@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 declare(strict_types=1);
 
@@ -40,9 +20,14 @@ class CategoryForTree
     private $active;
 
     /**
-     * @var array<int, string>
+     * @var string
      */
-    private $localizedNames;
+    private $name;
+
+    /**
+     * @var string
+     */
+    private $displayName;
 
     /**
      * @var CategoryForTree[]
@@ -52,18 +37,21 @@ class CategoryForTree
     /**
      * @param int $categoryId
      * @param bool $active
-     * @param array<int, string> $localizedNames
-     * @param array $children
+     * @param string $name,
+     * @param string $displayName
+     * @param CategoryForTree[] $children
      */
     public function __construct(
         int $categoryId,
         bool $active,
-        array $localizedNames,
+        string $name,
+        string $displayName,
         array $children
     ) {
         $this->categoryId = $categoryId;
         $this->active = $active;
-        $this->localizedNames = $localizedNames;
+        $this->name = $name;
+        $this->displayName = $displayName;
         $this->children = $children;
     }
 
@@ -84,11 +72,19 @@ class CategoryForTree
     }
 
     /**
-     * @return array<int, string>
+     * @return string
      */
-    public function getLocalizedNames(): array
+    public function getName(): string
     {
-        return $this->localizedNames;
+        return $this->name;
+    }
+
+    /**
+     * @return string
+     */
+    public function getDisplayName(): string
+    {
+        return $this->displayName;
     }
 
     /**

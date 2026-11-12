@@ -1,3 +1,7 @@
+/**
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
 .ps-submittable-input-wrapper {
   position: relative;
 
@@ -32,5 +36,11 @@
 
   .check-button.active {
     background: $primary;
+  }
+
+  // Integer arrows need an offset to avoid being covered by the button
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    margin-right: 22px;
   }
 }

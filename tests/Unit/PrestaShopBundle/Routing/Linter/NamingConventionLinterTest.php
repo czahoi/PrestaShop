@@ -1,33 +1,15 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\PrestaShopBundle\Routing\Linter;
 
 use PHPUnit\Framework\TestCase;
+use PrestaShopBundle\Routing\Linter\Exception\ControllerNotFoundException;
 use PrestaShopBundle\Routing\Linter\Exception\NamingConventionException;
+use PrestaShopBundle\Routing\Linter\Exception\SymfonyControllerConventionException;
 use PrestaShopBundle\Routing\Linter\NamingConventionLinter;
 use Symfony\Component\Routing\Route;
 use Tests\Resources\Controller\TestController;
@@ -49,9 +31,9 @@ class NamingConventionLinterTest extends TestCase
      */
     public function testLinterPassesWhenRouteAndControllerFollowNamingConventions($routeName, Route $route)
     {
-        $this->namingConventionLinter->lint($routeName, $route);
+        $this->expectNotToPerformAssertions();
 
-        $this->assertTrue($exceptionWasNotThrown = true);
+        $this->namingConventionLinter->lint($routeName, $route);
     }
 
     /**
@@ -60,6 +42,26 @@ class NamingConventionLinterTest extends TestCase
     public function testLinterThrowsExceptionWhenRouteAndControllerDoesNotFollowNamingConventions($routeName, Route $route)
     {
         $this->expectException(NamingConventionException::class);
+
+        $this->namingConventionLinter->lint($routeName, $route);
+    }
+
+    /**
+     * @dataProvider getRoutesThatDoNotFollowSymfonyConventions
+     */
+    public function testLinterThrowsExceptionWhenControllerDoesNotFollowSymfonyConventions($routeName, Route $route)
+    {
+        $this->expectException(SymfonyControllerConventionException::class);
+
+        $this->namingConventionLinter->lint($routeName, $route);
+    }
+
+    /**
+     * @dataProvider getRoutesThatUseControllerNotFound
+     */
+    public function testLinterThrowsExceptionWhenControllerIsNotFound($routeName, Route $route)
+    {
+        $this->expectException(ControllerNotFoundException::class);
 
         $this->namingConventionLinter->lint($routeName, $route);
     }
@@ -94,6 +96,26 @@ class NamingConventionLinterTest extends TestCase
             'admin_tests_do_something',
             new Route('/', [
                 '_controller' => sprintf('%s::%s', TestController::class, 'doSomethingComplexAction'),
+            ]),
+        ];
+    }
+
+    public function getRoutesThatDoNotFollowSymfonyConventions(): iterable
+    {
+        yield [
+            'admin_tests_do_something',
+            new Route('/', [
+                '_controller' => sprintf('%s:%s', TestController::class, 'doSomethingComplexAction'),
+            ]),
+        ];
+    }
+
+    public function getRoutesThatUseControllerNotFound(): iterable
+    {
+        yield [
+            'admin_tests_do_something',
+            new Route('/', [
+                '_controller' => sprintf('%s::%s', TestController::class, 'methodNotFound'),
             ]),
         ];
     }

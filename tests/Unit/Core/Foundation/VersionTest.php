@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Unit\Core\Foundation;
@@ -42,17 +22,17 @@ class VersionTest extends TestCase
      */
     protected $anotherVersion;
 
-    const VERSION = '1.2.3.4';
-    const MAJOR_VERSION_STRING = '1.2';
-    const MAJOR_VERSION = 2;
-    const MINOR_VERSION = 3;
-    const RELEASE_VERSION = 4;
+    public const VERSION = '1.2.3.4';
+    public const MAJOR_VERSION_STRING = '1.2';
+    public const MAJOR_VERSION = 2;
+    public const MINOR_VERSION = 3;
+    public const RELEASE_VERSION = 4;
 
-    const ANOTHER_VERSION = '1.2.0.0';
-    const ANOTHER_MAJOR_VERSION_STRING = '1.2';
-    const ANOTHER_MAJOR_VERSION = 2;
-    const ANOTHER_MINOR_VERSION = 3;
-    const ANOTHER_RELEASE_VERSION = 4;
+    public const ANOTHER_VERSION = '1.2.0.0';
+    public const ANOTHER_MAJOR_VERSION_STRING = '1.2';
+    public const ANOTHER_MAJOR_VERSION = 2;
+    public const ANOTHER_MINOR_VERSION = 3;
+    public const ANOTHER_RELEASE_VERSION = 4;
 
     protected function setUp(): void
     {
@@ -73,27 +53,27 @@ class VersionTest extends TestCase
         );
     }
 
-    public function testGetVersion()
+    public function testGetVersion(): void
     {
         $this->assertSame(self::VERSION, $this->version->getVersion());
     }
 
-    public function testGetMajorVersionString()
+    public function testGetMajorVersionString(): void
     {
         $this->assertSame(self::MAJOR_VERSION_STRING, $this->version->getMajorVersionString());
     }
 
-    public function testGetMajorVersion()
+    public function testGetMajorVersion(): void
     {
         $this->assertSame(self::MAJOR_VERSION, $this->version->getMajorVersion());
     }
 
-    public function testGetMinorVersion()
+    public function testGetMinorVersion(): void
     {
         $this->assertSame(self::MINOR_VERSION, $this->version->getMinorVersion());
     }
 
-    public function testGetReleaseVersion()
+    public function testGetReleaseVersion(): void
     {
         $this->assertSame(self::RELEASE_VERSION, $this->version->getPatchVersion());
     }
@@ -104,7 +84,7 @@ class VersionTest extends TestCase
      * @param string $string
      * @param array $expected
      */
-    public function testBuildFromString($string, $expected)
+    public function testBuildFromString(string $string, array $expected): void
     {
         $version = Version::buildFromString($string);
 
@@ -122,10 +102,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareGreater
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareGreaterVersion($version, $result)
+    public function testCompareGreaterVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -137,10 +117,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareGreaterEqual
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareGreaterEqualVersion($version, $result)
+    public function testCompareGreaterEqualVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -157,10 +137,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareLess
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareLessVersion($version, $result)
+    public function testCompareLessVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -177,10 +157,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getAnotherCompareGreater
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareGreaterAnotherVersion($version, $result)
+    public function testCompareGreaterAnotherVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -197,10 +177,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareLessEqual
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareLessEqualVersion($version, $result)
+    public function testCompareLessEqualVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -217,10 +197,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareEqual
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareEqualVersion($version, $result)
+    public function testCompareEqualVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -237,10 +217,10 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getCompareNotEqual
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
+     * @param bool $result Result
      */
-    public function testCompareNotEqualVersion($version, $result)
+    public function testCompareNotEqualVersion(string $version, bool $result): void
     {
         $this->assertEquals(
             $result,
@@ -257,13 +237,13 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getTwoVersionsToCompare
      *
-     * @param $first string Version
-     * @param $second string Version
-     * @param $expectedComparison string Comparison character
+     * @param string $first Version
+     * @param string $second Version
+     * @param string $expectedComparison Comparison character
      *
      * @throws InvalidVersionException
      */
-    public function testCompareTwoVersions($first, $second, $expectedComparison)
+    public function testCompareTwoVersions(string $first, string $second, string $expectedComparison)
     {
         $firstVersion = Version::buildFromString($first);
         $secondVersion = Version::buildFromString($second);
@@ -301,8 +281,7 @@ class VersionTest extends TestCase
     /**
      * @dataProvider getInvalidVersions
      *
-     * @param $version string  Version
-     * @param $result  boolean Result
+     * @param string $version Version
      */
     public function testCheckInvalidVersion($version)
     {
@@ -310,7 +289,7 @@ class VersionTest extends TestCase
         $this->version->isLessThan($version);
     }
 
-    public function provideVersions()
+    public function provideVersions(): array
     {
         return [
             '1.7.5.0' => [
@@ -657,16 +636,16 @@ class VersionTest extends TestCase
     }
 
     /**
-     * @param $result
+     * @param bool $result
      *
      * @return string
      */
-    private function getVerb($result)
+    private function getVerb(bool $result): string
     {
         return $result ? 'is' : 'is NOT';
     }
 
-    public function getTwoVersionsToCompare()
+    public function getTwoVersionsToCompare(): array
     {
         return [
             // incremental build versions

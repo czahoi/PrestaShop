@@ -1,3 +1,7 @@
+/**
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
+ */
 .adminpayment {
   .card {
     .module-item-list {
@@ -27,15 +31,6 @@
               margin-top: 1rem !important;
             }
           }
-        }
-      }
-    }
-
-    #modules_list_container_content {
-      .tab-pane {
-        @include media-breakpoint-down(sm) {
-          // stylelint-disable-next-line
-          overflow: scroll;
         }
       }
     }
@@ -75,12 +70,6 @@
                 .btn-group {
                   margin-top: 0;
                 }
-              }
-            }
-
-            .module_name {
-              .text-muted {
-                display: block;
               }
             }
           }

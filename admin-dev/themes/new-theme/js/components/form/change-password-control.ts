@@ -1,30 +1,11 @@
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 import ChangePasswordHandler from '../change-password-handler';
 import PasswordValidator from '../password-validator';
+import Router from '../../components/router';
 
 const {$} = window;
 
@@ -40,8 +21,6 @@ export default class ChangePasswordControl {
 
   hideButtonSelector: string;
 
-  generatePasswordButtonSelector: string;
-
   oldPasswordInputSelector: string;
 
   newPasswordInputSelector: string;
@@ -49,6 +28,10 @@ export default class ChangePasswordControl {
   confirmNewPasswordInputSelector: string;
 
   generatedPasswordDisplaySelector: string;
+
+  generatedPasswordButton: string;
+
+  passwordStrengthFeedbackContainerSelector: string;
 
   $newPasswordInputs: JQuery<HTMLElement>;
 
@@ -60,16 +43,18 @@ export default class ChangePasswordControl {
 
   passwordValidator: PasswordValidator;
 
+  router: Router;
+
   constructor(
     inputsBlockSelector: string,
     showButtonSelector: string,
     hideButtonSelector: string,
-    generatePasswordButtonSelector: string,
     oldPasswordInputSelector: string,
     newPasswordInputSelector: string,
     confirmNewPasswordInputSelector: string,
     generatedPasswordDisplaySelector: string,
     passwordStrengthFeedbackContainerSelector: string,
+    generatedPasswordButton: string,
   ) {
     // Block that contains password inputs
     this.$inputsBlock = $(inputsBlockSelector);
@@ -79,9 +64,6 @@ export default class ChangePasswordControl {
 
     // Button that hides the password inputs block
     this.hideButtonSelector = hideButtonSelector;
-
-    // Button that generates a random password
-    this.generatePasswordButtonSelector = generatePasswordButtonSelector;
 
     // Input to enter old password
     this.oldPasswordInputSelector = oldPasswordInputSelector;
@@ -94,6 +76,11 @@ export default class ChangePasswordControl {
 
     // Input that displays generated random password
     this.generatedPasswordDisplaySelector = generatedPasswordDisplaySelector;
+
+    // Block that displays password strength feedback
+    this.passwordStrengthFeedbackContainerSelector = passwordStrengthFeedbackContainerSelector;
+
+    this.generatedPasswordButton = generatedPasswordButton;
 
     // Main input for password generation
     this.$newPasswordInputs = this.$inputsBlock.find(
@@ -122,6 +109,7 @@ export default class ChangePasswordControl {
 
     this.hideInputsBlock();
     this.initEvents();
+    this.router = new Router();
   }
 
   /**
@@ -135,23 +123,20 @@ export default class ChangePasswordControl {
       this.hide($(e.currentTarget));
       this.showInputsBlock();
     });
-
     $(document).on('click', this.hideButtonSelector, () => {
       this.hideInputsBlock();
       this.show($(this.showButtonSelector));
     });
+    $(document).on('click', this.generatedPasswordButton, () => {
+      const $generatedPasswordDisplay = $(this.generatedPasswordDisplaySelector);
+      $.get(this.router.generate('admin_employees_get_password_generated')).then((response) => {
+        $generatedPasswordDisplay.val(response.password);
+        navigator.clipboard.writeText(response.password);
+      });
+    });
 
     // Watch and display feedback about password's strength
     this.passwordHandler.watchPasswordStrength(this.$newPasswordInputs);
-
-    $(document).on('click', this.generatePasswordButtonSelector, () => {
-      // Generate the password into main input.
-      this.passwordHandler.generatePassword(this.$newPasswordInputs);
-
-      // Copy the generated password from main input to additional inputs
-      this.$copyPasswordInputs.val(<string> this.$newPasswordInputs.val());
-      this.checkPasswordValidity();
-    });
 
     // Validate new password and it's confirmation when any of the inputs is changed
     $(document).on(
@@ -264,6 +249,9 @@ export default class ChangePasswordControl {
     this.$submittableInputs.removeAttr('required');
     this.$inputsBlock.find('input').val('');
     this.$inputsBlock.find('.form-text').text('');
+    this.$newPasswordInputs.popover('dispose');
+    this.hide(this.$inputsBlock.find(this.passwordStrengthFeedbackContainerSelector));
+    this.$newPasswordInputs.removeClass('border-success border-danger');
   }
 
   /**

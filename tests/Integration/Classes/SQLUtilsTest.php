@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 declare(strict_types=1);
@@ -75,6 +55,21 @@ class SQLUtilsTest extends TestCase
         yield [
             ['name', '[19.2|20|25]'],
             ' AND (`name` = "19.2" OR `name` = "20" OR `name` = "25")' . PHP_EOL,
+        ];
+        // Date range: date-only bounds should include the full last day (fixes #10822)
+        yield [
+            ['date_add', '[2018-07-01,2018-07-31]'],
+            ' AND `date_add` BETWEEN "2018-07-01 00:00:00" AND "2018-07-31 23:59:59"' . PHP_EOL,
+        ];
+        // Date range with table alias
+        yield [
+            ['date_add', '[2020-01-01,2020-12-31]', 'main.'],
+            ' AND `main`.`date_add` BETWEEN "2020-01-01 00:00:00" AND "2020-12-31 23:59:59"' . PHP_EOL,
+        ];
+        // Date range with full datetime values should remain untouched
+        yield [
+            ['date_add', '[2018-07-01 00:00:00,2018-07-31 14:30:00]'],
+            ' AND `date_add` BETWEEN "2018-07-01 00:00:00" AND "2018-07-31 14:30:00"' . PHP_EOL,
         ];
     }
 }

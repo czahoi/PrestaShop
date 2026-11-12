@@ -1,27 +1,7 @@
 <?php
 /**
- * Copyright since 2007 PrestaShop SA and Contributors
- * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Open Software License (OSL 3.0)
- * that is bundled with this package in the file LICENSE.md.
- * It is also available through the world-wide-web at this URL:
- * https://opensource.org/licenses/OSL-3.0
- * If you did not receive a copy of the license and are unable to
- * obtain it through the world-wide-web, please send an email
- * to license@prestashop.com so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade PrestaShop to newer
- * versions in the future. If you wish to customize PrestaShop for your
- * needs please refer to https://devdocs.prestashop.com/ for more information.
- *
- * @author    PrestaShop SA and Contributors <contact@prestashop.com>
- * @copyright Since 2007 PrestaShop SA and Contributors
- * @license   https://opensource.org/licenses/OSL-3.0 Open Software License (OSL 3.0)
+ * For the full copyright and license information, please view the
+ * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
 
 namespace Tests\Integration\PrestaShopBundle\Translation\Extractor;
@@ -34,24 +14,24 @@ use Tests\Integration\PrestaShopBundle\Translation\CatalogueVerifier;
 /**
  * Tests the extraction of wordings from a module using static code analysis
  *
- * @doc ./vendor/bin/phpunit -c tests/Integration/phpunit.xml --filter="LegacyModuleExtractorTest"
+ * ./vendor/bin/phpunit -c tests/Integration/phpunit.xml --filter="LegacyModuleExtractorTest"
  */
 class LegacyModuleExtractorTest extends KernelTestCase
 {
     /**
      * @var string Domain name of the modules translations
      */
-    const DOMAIN_NAME = 'ModulesTranslationtest';
-    const MODULE_NAME = 'translationtest';
+    public const DOMAIN_NAME = 'ModulesTranslationtest';
+    public const MODULE_NAME = 'translationtest';
 
     /**
      * @var CatalogueVerifier
      */
     private $catalogueVerifier;
 
-    public function __construct($name = null, array $data = [], $dataName = '')
+    public function __construct($name = null)
     {
-        parent::__construct($name, $data, $dataName);
+        parent::__construct($name);
 
         $this->catalogueVerifier = new CatalogueVerifier($this);
     }
@@ -60,7 +40,6 @@ class LegacyModuleExtractorTest extends KernelTestCase
      * @param string $locale
      * @param array $expected
      *
-     * @cover extract
      * @dataProvider provideTestCases
      */
     public function testExtractedCatalogueContainsTheExpectedWordings($locale, $expected)
